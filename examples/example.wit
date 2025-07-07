@@ -1,0 +1,332 @@
+/*
+ * Comprehensive Witness Script Example
+ * Real Estate Purchase Contract with Breach and Litigation
+ * Demonstrates: Contract formation, breach analysis, procedural validity, evidence, and appeals
+ */
+
+// ==================== TYPE DEFINITIONS ====================
+
+/* Objects */
+object casa = "residential house", non_movable;
+object escritura = "property deed", movable;
+object contrato = "purchase contract", movable;
+object poder_notarial = "power of attorney", movable;
+object certificado_libertad = "title certificate", movable;
+
+/* Services */
+service precio_venta = "purchase price", positive;
+service comision_inmobiliaria = "real estate commission", positive;
+service impuestos_transferencia = "transfer taxes", positive;
+service intereses_mora = "default interest", positive;
+service gastos_legales = "legal expenses", positive;
+
+service confidencialidad = "confidentiality obligation", negative;
+service no_competencia = "non-compete restriction", negative;
+service abstencion_venta = "sales restriction", negative;
+
+/* Actions */
+action vender = "sell", casa;
+action comprar = "purchase", casa;
+action entregar = "deliver", escritura;
+action recibir = "receive", escritura;
+action pagar = "pay", precio_venta;
+action cobrar = "collect", precio_venta;
+action transferir = "transfer", escritura;
+action inscribir = "register", escritura;
+
+action presentar = "present", contrato;
+action notificar = "notify", contrato;
+action impugnar = "challenge", contrato;
+action defender = "defend", contrato;
+
+action ejercer = "exercise", gastos_legales;
+action demandar = "sue", gastos_legales;
+action contestar = "answer", gastos_legales;
+action apelar = "appeal", gastos_legales;
+
+action mantener = "maintain", confidencialidad;
+action abstenerse = "abstain", abstencion_venta;
+
+/* Subjects */
+subject vendedor = "Pedro Martinez";
+subject comprador = "Juan Rodriguez";
+subject inmobiliaria = "Real Estate Corp";
+subject notario = "Maria Gonzalez";
+subject banco = "National Bank";
+subject abogado_vendedor = "Legal Firm A";
+subject abogado_comprador = "Legal Firm B";
+
+/* Authorities */
+authority juzgado_civil = "Civil Court No. 1";
+authority registro_propiedad = "Property Registry Office";
+authority tribunal_superior = "Superior Court";
+
+/* Time Constraints */
+time plazo_entrega = 30, within;
+time plazo_pago = 15, within;
+time plazo_contestacion = 20, within;
+time vencimiento_poder = 365, expired;
+
+// ==================== CONTRACT FORMATION ASSETS ====================
+
+/* Primary Contract Assets */
+asset venta_casa = vendedor, vender, comprador;
+asset compra_casa = comprador, comprar, vendedor;
+asset entrega_escritura = vendedor, entregar, comprador;
+asset recepcion_escritura = comprador, recibir, vendedor;
+asset pago_precio = comprador, pagar, vendedor;
+asset cobro_precio = vendedor, cobrar, comprador;
+
+/* Supporting Service Assets */
+asset pago_comision = vendedor, pagar, inmobiliaria;
+asset pago_impuestos = comprador, pagar, registro_propiedad;
+asset transferencia_legal = notario, transferir, registro_propiedad;
+
+/* Obligation and Confidentiality Assets */
+asset confidencialidad_vendedor = vendedor, mantener, comprador;
+asset restriccion_venta = vendedor, abstenerse, comprador;
+
+// ==================== CONTRACT VALIDITY CLAUSES ====================
+
+/* Basic Contract Formation */
+clause formacion_contrato = oblig(venta_casa) EQUIV oblig(compra_casa);
+clause entrega_obligacion = oblig(venta_casa) IMPLIES oblig(entrega_escritura);
+clause pago_obligacion = oblig(compra_casa) IMPLIES oblig(pago_precio);
+
+/* Reciprocal Obligations */
+clause intercambio_principal = oblig(entrega_escritura) EQUIV oblig(pago_precio);
+clause servicios_auxiliares = oblig(pago_comision) AND oblig(pago_impuestos) AND oblig(transferencia_legal);
+
+/* Confidentiality and Restrictions */
+clause obligaciones_accesorias = oblig(confidencialidad_vendedor) AND oblig(restriccion_venta);
+
+/* Complete Contract Validity */
+clause contrato_valido = formacion_contrato AND entrega_obligacion AND pago_obligacion AND intercambio_principal AND servicios_auxiliares AND obligaciones_accesorias;
+
+// ==================== FIRST GLOBAL CHECK ====================
+
+asset validez_contractual = global();
+
+// ==================== CONTEXTUAL JOINS ====================
+
+/* Real Estate Transfer */
+asset transferencia_inmobiliaria = transfer(entrega_escritura, recepcion_escritura);
+
+/* Commercial Sale */
+asset compraventa = sell(venta_casa, pago_precio);
+
+/* Service Compensation */
+asset compensacion_servicios = compensation(pago_comision, transferencia_legal);
+
+/* Mixed Obligations */
+asset consideracion_mixta = consideration(pago_precio, confidencialidad_vendedor);
+
+/* Forbearance Agreement */
+asset abstencion_mutua = forbearance(confidencialidad_vendedor, restriccion_venta);
+
+/* Property Encumbrance */
+asset gravamen_propiedad = encumber(venta_casa, pago_impuestos);
+
+// ==================== BREACH SCENARIO ====================
+
+/* Breach Assets */
+asset incumplimiento_pago = comprador, abstenerse, vendedor;
+asset incumplimiento_entrega = vendedor, abstenerse, comprador;
+asset mora_contractual = comprador, ejercer, vendedor;
+
+/* Default Interest and Penalties */
+action pagar_intereses = "pay", intereses_mora;
+asset pago_intereses_mora = comprador, pagar_intereses, vendedor;
+
+/* Breach Analysis Clauses */
+clause incumplimiento_comprador = not(pago_precio) IMPLIES claim(pago_intereses_mora);
+clause incumplimiento_vendedor = not(entrega_escritura) IMPLIES claim(gastos_legales);
+clause resolucion_contrato = (not(pago_precio) OR not(entrega_escritura)) IMPLIES not(contrato_valido);
+
+// ==================== BREACH ANALYSIS ====================
+
+asset analisis_incumplimiento = litis(incumplimiento_pago, incumplimiento_entrega, pago_intereses_mora);
+
+// ==================== PROCEDURAL CAPACITY ASSETS ====================
+
+/* Power of Attorney Assets */
+asset poder_vendedor = abogado_vendedor, presentar, juzgado_civil;
+asset poder_comprador = abogado_comprador, presentar, juzgado_civil;
+asset representacion_legal = abogado_vendedor, defender, vendedor;
+
+/* Standing and Legitimacy */
+asset legitimacion_activa = vendedor, presentar, juzgado_civil;
+asset legitimacion_pasiva = comprador, contestar, juzgado_civil;
+
+/* Jurisdictional Competence */
+asset competencia_territorial = juzgado_civil, ejercer, vendedor;
+asset competencia_material = juzgado_civil, ejercer, comprador;
+
+// ==================== PROCEDURAL CONSENT ASSETS ====================
+
+/* Service and Notice */
+asset notificacion_demanda = juzgado_civil, notificar, comprador;
+asset recepcion_notificacion = comprador, recibir, juzgado_civil;
+asset conocimiento_procesal = comprador, presentar, juzgado_civil;
+
+/* Procedural Waivers */
+asset renuncia_plazos = comprador, abstenerse, juzgado_civil;
+asset aceptacion_jurisdiccion = comprador, presentar, juzgado_civil;
+
+// ==================== LITIGATION ASSETS ====================
+
+/* Court Filings */
+asset demanda_incumplimiento = abogado_vendedor, presentar, juzgado_civil;
+asset contestacion_demanda = abogado_comprador, contestar, juzgado_civil;
+asset reconvencion = abogado_comprador, presentar, juzgado_civil;
+
+/* Procedural Actions */
+asset solicitud_medidas = abogado_vendedor, presentar, juzgado_civil;
+asset oposicion_medidas = abogado_comprador, impugnar, juzgado_civil;
+
+// ==================== EVIDENCE CONSTRUCTION ====================
+
+/* Evidence Assets */
+asset documento_contrato = notario, presentar, juzgado_civil;
+asset certificado_registro = registro_propiedad, presentar, juzgado_civil;
+asset comprobante_pago_parcial = banco, presentar, juzgado_civil;
+asset peritaje_inmobiliario = inmobiliaria, presentar, juzgado_civil;
+
+/* Evidence Chains */
+asset evidencia_contractual = evidence(demanda_incumplimiento, documento_contrato);
+asset evidencia_registral = evidence(evidencia_contractual, certificado_registro);
+asset evidencia_financiera = evidence(evidencia_registral, comprobante_pago_parcial);
+asset evidencia_completa = evidence(evidencia_financiera, peritaje_inmobiliario);
+
+/* Counter-Evidence */
+asset contra_evidencia_pago = evidence(contestacion_demanda, comprobante_pago_parcial);
+asset contra_evidencia_defectos = evidence(contra_evidencia_pago, peritaje_inmobiliario);
+
+// ==================== ARGUMENT CONSTRUCTION ====================
+
+/* Main Arguments */
+asset argumento_incumplimiento = argument(evidencia_completa, analisis_incumplimiento);
+asset contraargumento_cumplimiento = argument(contra_evidencia_defectos, legitimacion_pasiva);
+
+/* Procedural Arguments */
+asset argumento_capacidad = argument(poder_vendedor, legitimacion_activa);
+asset contraargumento_incompetencia = argument(poder_comprador, competencia_territorial);
+
+// ==================== PROCEDURAL VALIDITY CLAUSES ====================
+
+/* Capacity Validity */
+clause capacidad_procesal_valida = oblig(poder_vendedor) AND oblig(legitimacion_activa) AND oblig(competencia_territorial);
+
+/* Consent Validity */
+clause consentimiento_procesal_valido = oblig(notificacion_demanda) AND oblig(conocimiento_procesal);
+
+/* Object Validity */
+clause objeto_procesal_valido = oblig(demanda_incumplimiento) AND oblig(solicitud_medidas);
+
+/* Cause Validity */
+clause causa_procesal_valida = oblig(argumento_incumplimiento) AND oblig(evidencia_completa);
+
+/* Form Validity */
+clause forma_procesal_valida = oblig(demanda_incumplimiento) AND oblig(contestacion_demanda);
+
+/* Complete Procedural Validity */
+clause validez_procesal_completa = capacidad_procesal_valida AND consentimiento_procesal_valido AND objeto_procesal_valido AND causa_procesal_valida AND forma_procesal_valida;
+
+// ==================== PROCEDURAL INVALIDITY ANALYSIS ====================
+
+/* Procedural Defects */
+clause incapacidad_procesal = not(capacidad_procesal_valida);
+clause vicio_consentimiento_procesal = not(consentimiento_procesal_valido);
+clause objeto_procesal_invalido = not(objeto_procesal_valido);
+clause causa_procesal_invalida = not(causa_procesal_valida);
+clause forma_procesal_invalida = not(forma_procesal_valida);
+
+/* Overall Procedural Invalidity (De Morgan's Law) */
+clause procedimiento_invalido = incapacidad_procesal OR vicio_consentimiento_procesal OR objeto_procesal_invalido OR causa_procesal_invalida OR forma_procesal_invalida;
+
+// ==================== ADVERSARIAL PROCEEDINGS ====================
+
+/* Disputed Issues */
+clause disputa_cumplimiento = oblig(argumento_incumplimiento) XOR oblig(contraargumento_cumplimiento);
+clause disputa_competencia = oblig(argumento_capacidad) XOR oblig(contraargumento_incompetencia);
+clause disputa_evidencia = oblig(evidencia_completa) XOR oblig(contra_evidencia_defectos);
+
+/* Combined Dispute */
+clause litigio_principal = disputa_cumplimiento AND disputa_competencia AND disputa_evidencia;
+
+// ==================== SECOND GLOBAL CHECK ====================
+
+asset validez_litigio = global();
+
+// ==================== DOMAIN OPERATIONS ====================
+
+/* Aggregate Contract Analysis */
+asset analisis_contractual = domain(contrato_valido, incumplimiento_comprador, incumplimiento_vendedor);
+
+/* Aggregate Procedural Analysis */
+asset analisis_procesal = domain(validez_procesal_completa, procedimiento_invalido);
+
+/* Aggregate Evidence Analysis */
+asset analisis_probatorio = domain(evidencia_completa, contra_evidencia_defectos);
+
+/* Combined Legal Analysis */
+asset analisis_integral = domain(analisis_contractual, analisis_procesal, analisis_probatorio);
+
+// ==================== APPEALS PREPARATION ====================
+
+/* Appellate Assets */
+asset recurso_apelacion = abogado_vendedor, apelar, tribunal_superior;
+asset adhesion_apelacion = abogado_comprador, apelar, tribunal_superior;
+
+/* Appellate Arguments */
+asset argumento_apelacion = argument(analisis_integral, recurso_apelacion);
+asset contraargumento_apelacion = argument(analisis_procesal, adhesion_apelacion);
+
+/* Appellate Evidence */
+asset evidencia_apelacion = evidence(argumento_apelacion, analisis_probatorio);
+
+// ==================== APPEALS VALIDITY ====================
+
+clause validez_apelacion = oblig(recurso_apelacion) AND oblig(evidencia_apelacion);
+clause disputa_apelacion = oblig(argumento_apelacion) XOR oblig(contraargumento_apelacion);
+
+// ==================== FINAL GLOBAL CHECK ====================
+
+asset validez_completa_sistema = global();
+
+// ==================== MEET OPERATIONS ====================
+
+/* Extract Common Elements */
+asset elementos_comunes_contractuales = meet(analisis_contractual, analisis_procesal);
+asset elementos_comunes_probatorios = meet(analisis_probatorio, analisis_integral);
+
+/* Final Common Analysis */
+asset analisis_comun_final = meet(elementos_comunes_contractuales, elementos_comunes_probatorios);
+
+// ==================== SYSTEM INTEGRITY CHECK ====================
+
+clause integridad_sistema_legal = validez_contractual AND validez_litigio AND validez_completa_sistema AND oblig(analisis_comun_final);
+
+/*
+ * End of Comprehensive Witness Script
+ * 
+ * This script demonstrates:
+ * 1. Complete type system usage (objects, services, actions, subjects, authorities, time)
+ * 2. Contract formation and validity analysis
+ * 3. Breach detection and analysis
+ * 4. Procedural validity verification
+ * 5. Evidence and argument construction
+ * 6. Adversarial legal positioning with XOR
+ * 7. Multiple global satisfiability checks
+ * 8. Domain operations for clause aggregation
+ * 9. Litis operations for selective analysis
+ * 10. All contextual joins (transfer, sell, compensation, consideration, forbearance, encumber, evidence, argument)
+ * 11. Meet operations on joined assets
+ * 12. Complex logical expressions with AND, OR, XOR, IMPLIES, EQUIV
+ * 13. Layered legal reasoning from contract through appeals
+ * 
+ * Expected compilation output:
+ * - Truth tables for each global() operation
+ * - Satisfiability verification at each stage
+ * - Evidence of complete legal system modeling capability
+ */

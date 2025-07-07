@@ -1,0 +1,84 @@
+%option c++
+%option noyywrap
+%option yyclass="witness::Lexer"
+%option noinput
+%option nounistd
+
+%{
+#include "driver.hpp"
+#include "lexer.hpp"
+#include <utility>
+
+witness::Lexer::Lexer(std::istream* in, witness::Driver& driver)
+  : yyFlexLexer(in), driver(driver) {}
+
+#undef YY_DECL
+#define YY_DECL witness::Parser::symbol_type witness::Lexer::lex()
+
+using token = witness::Parser::token;
+%}
+
+%x COMMENT
+
+%%
+
+%{
+    location.step();
+%}
+
+"/*"                { BEGIN(COMMENT); continue; }
+<COMMENT>"*/"        { BEGIN(INITIAL); continue; }
+<COMMENT>[^*/\n]+   { location.columns(yyleng); continue; }
+<COMMENT>"*"         { location.columns(yyleng); continue; }
+<COMMENT>\n          { location.lines(); continue; }
+<COMMENT><<EOF>>     { driver.error(location, "unterminated comment"); return witness::Parser::make_YYEOF(std::move(location)); }
+
+"//"[^\n]*          { continue; }
+
+[ \t\r]+            { location.columns(yyleng); continue; }
+\n+                 { location.lines(yyleng); continue; }
+
+";"                 return witness::Parser::make_SEMICOLON(std::move(location));
+","                 return witness::Parser::make_COMMA(std::move(location));
+"="                 return witness::Parser::make_EQUALS(std::move(location));
+"("                 return witness::Parser::make_LPAREN(std::move(location));
+")"                 return witness::Parser::make_RPAREN(std::move(location));
+
+"object"            return witness::Parser::make_OBJECT(std::move(location));
+"service"           return witness::Parser::make_SERVICE(std::move(location));
+"action"            return witness::Parser::make_ACTION(std::move(location));
+"subject"           return witness::Parser::make_SUBJECT(std::move(location));
+"authority"         return witness::Parser::make_AUTHORITY(std::move(location));
+"time"              return witness::Parser::make_TIME(std::move(location));
+"asset"             return witness::Parser::make_ASSET(std::move(location));
+"clause"            return witness::Parser::make_CLAUSE(std::move(location));
+
+"AND"               return witness::Parser::make_AND(std::move(location));
+"OR"                return witness::Parser::make_OR(std::move(location));
+"XOR"               return witness::Parser::make_XOR(std::move(location));
+"IMPLIES"           return witness::Parser::make_IMPLIES(std::move(location));
+"EQUIV"             return witness::Parser::make_EQUIV(std::move(location));
+"NOT"               return witness::Parser::make_NOT(std::move(location));
+
+[0-9]+              {
+    return witness::Parser::make_IDENTIFIER(std::string(yytext), std::move(location));
+}
+
+[a-zA-Z_][a-zA-Z0-9_]* {
+    return witness::Parser::make_IDENTIFIER(std::string(yytext), std::move(location));
+}
+
+\"[^\"\n]*\" {
+    return witness::Parser::make_STRING_LITERAL(std::string(yytext + 1, yyleng - 2), std::move(location));
+}
+
+.                   { driver.error(location, "invalid character: " + std::string(yytext)); return witness::Parser::make_YYEOF(std::move(location)); }
+
+<<EOF>>             return witness::Parser::make_YYEOF(std::move(location));
+
+%%
+
+// Global yylex function implementation
+witness::Parser::symbol_type witness::yylex(witness::Driver& driver) {
+    return driver.lexer->lex();
+} 

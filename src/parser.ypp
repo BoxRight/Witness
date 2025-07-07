@@ -1,0 +1,137 @@
+%skeleton "lalr1.cc"
+%require "3.8"
+%language "C++"
+
+%code requires {
+    #include <string>
+    #include <vector>
+    #include <memory>
+    #include "ast.hpp"
+
+    namespace witness { class Driver; }
+}
+
+%code {
+    #include "driver.hpp"
+    #include "lexer.hpp"
+    
+    // Global yylex function that the parser will call
+    witness::Parser::symbol_type yylex(witness::Driver& driver) {
+        return driver.lexer->lex();
+    }
+}
+
+%defines
+%define api.namespace {witness}
+%define api.parser.class {Parser}
+%define api.value.type variant
+%define api.token.constructor
+%locations
+
+// Pass the driver to the parser
+%parse-param { witness::Driver& driver }
+
+// Pass the driver to yylex
+%lex-param { witness::Driver& driver }
+
+// Token declarations with types
+%token <std::string> IDENTIFIER STRING_LITERAL
+%token SEMICOLON COMMA EQUALS
+%token OBJECT SERVICE ACTION SUBJECT AUTHORITY TIME ASSET CLAUSE
+%token AND OR XOR IMPLIES EQUIV
+%token LPAREN RPAREN
+%token NOT
+
+// Operator precedence
+%right IMPLIES
+%left EQUIV XOR OR AND
+%right NOT
+
+// Non-terminal types
+%type <Program*> statements
+%type <Statement*> statement
+%type <Statement*> type_definition asset_definition clause_definition
+%type <Expression*> expression
+%type <ExpressionList*> expression_list
+%type <Identifier*> identifier_expr
+%type <std::string> type_keyword
+%type <ExpressionList*> opt_expression_list
+%type <Expression*> function_call
+
+%%
+
+// Grammar Rules
+program:
+    statements { driver.set_program($1); }
+    ;
+
+statements:
+    /* empty */ { $$ = new Program(); }
+    | statements statement { $1->addStatement(std::unique_ptr<Statement>($2)); $$ = $1; }
+    ;
+
+statement:
+    type_definition { $$ = $1; }
+    | asset_definition { $$ = $1; }
+    | clause_definition { $$ = $1; }
+    | SEMICOLON { $$ = nullptr; /* Ignore empty statements */ }
+    ;
+
+type_keyword:
+    OBJECT    { $$ = "object"; }
+    | SERVICE   { $$ = "service"; }
+    | ACTION    { $$ = "action"; }
+    | SUBJECT   { $$ = "subject"; }
+    | AUTHORITY { $$ = "authority"; }
+    | TIME      { $$ = "time"; }
+    ;
+
+type_definition:
+    type_keyword identifier_expr EQUALS expression_list SEMICOLON { $$ = new TypeDefinition($1, std::unique_ptr<Identifier>($2), std::unique_ptr<ExpressionList>($4)); }
+    ;
+
+asset_definition:
+    ASSET identifier_expr EQUALS expression_list SEMICOLON { $$ = new AssetDefinition(std::unique_ptr<Identifier>($2), std::unique_ptr<ExpressionList>($4)); }
+    ;
+
+clause_definition:
+    CLAUSE identifier_expr EQUALS expression SEMICOLON { $$ = new ClauseDefinition(std::unique_ptr<Identifier>($2), std::unique_ptr<Expression>($4)); }
+    ;
+
+expression:
+    identifier_expr                 { $$ = $1; }
+    | STRING_LITERAL                { $$ = new StringLiteral($1); }
+    | function_call                 { $$ = $1; }
+    | expression AND expression         { $$ = new BinaryOpExpression("AND", std::unique_ptr<Expression>($1), std::unique_ptr<Expression>($3)); }
+    | expression OR expression          { $$ = new BinaryOpExpression("OR", std::unique_ptr<Expression>($1), std::unique_ptr<Expression>($3)); }
+    | expression XOR expression         { $$ = new BinaryOpExpression("XOR", std::unique_ptr<Expression>($1), std::unique_ptr<Expression>($3)); }
+    | expression IMPLIES expression     { $$ = new BinaryOpExpression("IMPLIES", std::unique_ptr<Expression>($1), std::unique_ptr<Expression>($3)); }
+    | expression EQUIV expression       { $$ = new BinaryOpExpression("EQUIV", std::unique_ptr<Expression>($1), std::unique_ptr<Expression>($3)); }
+    | NOT expression                    { $$ = new UnaryOpExpression("NOT", std::unique_ptr<Expression>($2)); }
+    | LPAREN expression RPAREN          { $$ = $2; }
+    ;
+
+function_call:
+    identifier_expr LPAREN opt_expression_list RPAREN { $$ = new FunctionCallExpression(std::unique_ptr<Identifier>($1), std::unique_ptr<ExpressionList>($3)); }
+    ;
+
+opt_expression_list:
+    /* empty */       { $$ = new ExpressionList(); }
+    | expression_list { $$ = $1; }
+    ;
+
+identifier_expr:
+    IDENTIFIER { $$ = new Identifier($1); }
+    ;
+
+expression_list:
+    expression { $$ = new ExpressionList(); $$->addExpression(std::unique_ptr<Expression>($1)); }
+    | expression_list COMMA expression { $1->addExpression(std::unique_ptr<Expression>($3)); $$ = $1; }
+    ;
+
+%%
+
+// Error reporting function
+void witness::Parser::error(const witness::location& l, const std::string& m) {
+    driver.error(l, m);
+} 
