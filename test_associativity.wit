@@ -1,0 +1,46 @@
+// Simple test for associativity validation
+
+// Parties
+subject alice = "Alice";
+subject bob = "Bob";
+subject charlie = "Charlie";
+
+// Object and Service
+object bike = "bicycle", movable;
+object car = "automobile", movable;
+service payment = "money", positive;
+
+// Actions
+action sell_bike = "sell", bike;
+action sell_car = "sell", car;
+action pay = "pay", payment;
+
+// Assets
+asset bike_sale = alice, sell_bike, bob;
+asset car_sale = bob, sell_car, charlie;
+asset payment1 = charlie, pay, alice;
+asset payment2 = alice, pay, bob;
+
+// Test universal join associativity
+asset test_join_left = join(join(bike_sale, car_sale), payment1);
+asset test_join_right = join(bike_sale, join(car_sale, payment1));
+
+// Test evidence associativity
+asset test_evidence_left = evidence(evidence(bike_sale, car_sale), payment1);
+asset test_evidence_right = evidence(bike_sale, evidence(car_sale, payment1));
+
+// Test argument associativity
+asset test_argument_left = argument(argument(bike_sale, car_sale), payment1);
+asset test_argument_right = argument(bike_sale, argument(car_sale, payment1));
+
+// Test contextual join associativity (these should fail type validation but test associativity logic)
+asset test_transfer_left = transfer(transfer(bike_sale, car_sale), payment1);
+asset test_transfer_right = transfer(bike_sale, transfer(car_sale, payment1));
+
+// Test compensation associativity
+asset test_compensation_left = compensation(compensation(payment1, payment2), payment1);
+asset test_compensation_right = compensation(payment1, compensation(payment2, payment1));
+
+// Simple clause to trigger semantic analysis
+clause test_clause = oblig(bike_sale);
+asset check = global(); 

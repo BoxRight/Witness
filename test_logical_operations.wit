@@ -1,0 +1,44 @@
+// Comprehensive test for all logical operations
+
+// Parties
+subject alice = "Alice";
+subject bob = "Bob";
+
+// Object and Service
+object bike = "bicycle", movable;
+service payment = "money", positive;
+
+// Actions
+action sell_bike = "sell", bike;
+action pay = "pay", payment;
+
+// Assets
+asset bike_sale = alice, sell_bike, bob;
+asset payment1 = bob, pay, alice;
+asset payment2 = alice, pay, bob;
+
+// Test all binary logical operations
+clause test_and = oblig(bike_sale) AND oblig(payment1);
+clause test_or = oblig(bike_sale) OR oblig(payment1);
+clause test_xor = oblig(bike_sale) XOR oblig(payment1);
+clause test_implies = oblig(bike_sale) IMPLIES oblig(payment1);
+clause test_equiv = oblig(bike_sale) EQUIV oblig(payment1);
+
+// Test unary logical operations
+clause test_not = NOT oblig(bike_sale);
+clause test_not_func = not(oblig(bike_sale));
+
+// Test function calls
+clause test_oblig = oblig(bike_sale);
+clause test_claim = claim(payment1);
+
+// Test complex combinations
+clause test_complex1 = (oblig(bike_sale) AND oblig(payment1)) OR (NOT oblig(payment2));
+clause test_complex2 = (oblig(bike_sale) IMPLIES oblig(payment1)) XOR (oblig(payment2) EQUIV claim(payment1));
+clause test_complex3 = NOT(oblig(bike_sale) AND (oblig(payment1) OR claim(payment2)));
+
+// Test nested function calls
+clause test_nested = not(oblig(bike_sale)) AND claim(not(payment1));
+
+// Global check
+asset check = global(); 

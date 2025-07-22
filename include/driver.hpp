@@ -44,6 +44,10 @@ public:
     // Print the AST
     void print_ast() const;
 
+    // Solver mode management
+    void setSolverMode(const std::string& mode);
+    std::string getSolverMode() const;
+
     // Error handling
     void error(const witness::location& l, const std::string& m);
     void error(const std::string& m);
@@ -54,6 +58,9 @@ private:
     
     // The semantic analyzer instance
     std::unique_ptr<SemanticAnalyzer> analyzer;
+    
+    // Solver mode: "exhaustive" or "external"
+    std::string solverMode;
     
     // Methods to manage the lexer's input stream
     void scan_begin(std::istream& in);

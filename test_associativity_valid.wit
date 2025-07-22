@@ -1,0 +1,57 @@
+// Test associativity with valid reciprocal patterns
+
+// Parties
+subject alice = "Alice";
+subject bob = "Bob";
+
+// Object and Service
+object bike = "bicycle", movable;
+object car = "automobile", movable;
+service payment = "money", positive;
+service service1 = "consulting", positive;
+service service2 = "maintenance", positive;
+
+// Actions
+action sell_bike = "sell", bike;
+action buy_bike = "buy", bike;
+action sell_car = "sell", car;
+action buy_car = "buy", car;
+action pay = "pay", payment;
+action receive = "receive", payment;
+action provide = "provide", service1;
+action accept = "accept", service1;
+
+// Assets with valid reciprocal patterns
+// transfer: (alice, sell_bike, bob) ↔ (bob, buy_bike, alice)
+asset bike_sale = alice, sell_bike, bob;
+asset bike_purchase = bob, buy_bike, alice;
+
+// transfer: (bob, sell_car, alice) ↔ (alice, buy_car, bob)  
+asset car_sale = bob, sell_car, alice;
+asset car_purchase = alice, buy_car, bob;
+
+// compensation: (alice, pay, bob) ↔ (bob, receive, alice)
+asset payment_to_bob = alice, pay, bob;
+asset payment_from_alice = bob, receive, alice;
+
+// compensation: (bob, provide, alice) ↔ (alice, accept, bob)
+asset service_to_alice = bob, provide, alice;
+asset service_from_bob = alice, accept, bob;
+
+// Test universal join associativity with valid assets
+asset test_join_left = join(join(bike_sale, car_sale), payment_to_bob);
+asset test_join_right = join(bike_sale, join(car_sale, payment_to_bob));
+
+// Test evidence associativity
+asset test_evidence_left = evidence(evidence(bike_sale, car_sale), payment_to_bob);
+asset test_evidence_right = evidence(bike_sale, evidence(car_sale, payment_to_bob));
+
+// Test argument associativity
+asset test_argument_left = argument(argument(bike_sale, car_sale), payment_to_bob);
+asset test_argument_right = argument(bike_sale, argument(car_sale, payment_to_bob));
+
+
+
+// Simple clause to trigger semantic analysis
+clause test_clause = oblig(bike_sale);
+asset check = global(); 

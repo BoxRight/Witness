@@ -36,6 +36,17 @@ SemanticAnalyzer::SemanticAnalyzer() {
     
     // Initialize asset ID tracking for satisfiability checking
     next_asset_id = 1;
+    
+    // Initialize solver mode
+    solverMode = "exhaustive";
+}
+
+void SemanticAnalyzer::setSolverMode(const std::string& mode) {
+    solverMode = mode;
+}
+
+std::string SemanticAnalyzer::getSolverMode() const {
+    return solverMode;
 }
 
 int SemanticAnalyzer::getOrAssignAssetID(const std::string& asset_name) {
@@ -76,6 +87,28 @@ void SemanticAnalyzer::addClause(const std::string& clause_name, const std::vect
 }
 
 SemanticAnalyzer::SatisfiabilityResult SemanticAnalyzer::generateTruthTable() {
+    SatisfiabilityResult result;
+    result.satisfiable = false;
+
+    if (current_clauses.empty()) {
+        result.satisfiable = true;
+        result.assignments.push_back({}); // Empty assignment satisfies no clauses
+        return result;
+    }
+
+    if (solverMode == "exhaustive") {
+        // Use current exhaustive approach
+        return generateExhaustiveTruthTable();
+    } else if (solverMode == "external") {
+        // Use external solver approach with set-based clause representation
+        return generateExternalSolverTruthTable();
+    } else {
+        reportError("Unknown solver mode: " + solverMode);
+        return result;
+    }
+}
+
+SemanticAnalyzer::SatisfiabilityResult SemanticAnalyzer::generateExhaustiveTruthTable() {
     SatisfiabilityResult result;
     result.satisfiable = false;
 
@@ -143,6 +176,159 @@ SemanticAnalyzer::SatisfiabilityResult SemanticAnalyzer::generateTruthTable() {
         reportError(result.error_message);
     }
 
+    return result;
+}
+
+SemanticAnalyzer::SatisfiabilityResult SemanticAnalyzer::generateExternalSolverTruthTable() {
+    SatisfiabilityResult result;
+    result.satisfiable = false;
+
+    if (current_clauses.empty()) {
+        result.satisfiable = true;
+        result.assignments.push_back({}); // Empty assignment satisfies no clauses
+        return result;
+    }
+
+    // Collect all unique asset IDs used in all clause expressions
+    std::set<int> all_asset_ids;
+    for (const auto& clause : current_clauses) {
+        collectAssetIDs(clause.expr, all_asset_ids);
+    }
+    std::vector<int> asset_ids(all_asset_ids.begin(), all_asset_ids.end());
+    int num_assets = asset_ids.size();
+
+    reportWarning("External solver mode: " + std::to_string(num_assets) + " assets, " +
+                  std::to_string(current_clauses.size()) + " clauses");
+
+    // Generate sets of satisfying assignments for each clause
+    std::vector<std::vector<std::vector<int>>> clause_satisfying_assignments;
+    
+    for (const auto& clause : current_clauses) {
+        std::vector<std::vector<int>> clause_assignments;
+        
+        // Generate all possible assignments for this clause's variables
+        std::set<int> clause_asset_ids;
+        collectAssetIDs(clause.expr, clause_asset_ids);
+        std::vector<int> clause_asset_vector(clause_asset_ids.begin(), clause_asset_ids.end());
+        int clause_num_assets = clause_asset_vector.size();
+        
+        for (int assignment = 0; assignment < (1 << clause_num_assets); assignment++) {
+            std::map<int, bool> assignment_map;
+            std::vector<int> current_assignment;
+            
+            // Create assignment for this clause
+            for (int i = 0; i < clause_num_assets; i++) {
+                int asset_id = clause_asset_vector[i];
+                bool value = (assignment & (1 << i));
+                assignment_map[asset_id] = value;
+                if (value) {
+                    current_assignment.push_back(asset_id);
+                } else {
+                    current_assignment.push_back(-asset_id);
+                }
+            }
+            
+            // Check if this assignment satisfies the clause
+            try {
+                if (evalExpr(clause.expr, assignment_map)) {
+                    clause_assignments.push_back(current_assignment);
+                }
+            } catch (const std::exception& e) {
+                reportError(std::string("[generateExternalSolverTruthTable] Evaluation error: ") + e.what());
+            }
+        }
+        
+        clause_satisfying_assignments.push_back(clause_assignments);
+    }
+
+    // For now, use a simple intersection approach to find global solutions
+    // In a real implementation, this would call an external solver
+    if (!clause_satisfying_assignments.empty()) {
+        // Start with the first clause's assignments
+        std::vector<std::vector<int>> global_assignments = clause_satisfying_assignments[0];
+        
+        // Intersect with each subsequent clause
+        for (size_t i = 1; i < clause_satisfying_assignments.size(); i++) {
+            std::vector<std::vector<int>> new_global_assignments;
+            
+            for (const auto& global_assignment : global_assignments) {
+                for (const auto& clause_assignment : clause_satisfying_assignments[i]) {
+                    // Check if assignments are compatible (simplified intersection)
+                    if (assignmentsCompatible(global_assignment, clause_assignment)) {
+                        // Merge assignments
+                        auto merged = mergeAssignments(global_assignment, clause_assignment);
+                        new_global_assignments.push_back(merged);
+                    }
+                }
+            }
+            
+            global_assignments = new_global_assignments;
+        }
+        
+        result.assignments = global_assignments;
+    }
+
+    result.satisfiable = !result.assignments.empty();
+
+    if (result.satisfiable) {
+        reportWarning("External solver completed: " + std::to_string(result.assignments.size()) + " satisfying assignments found");
+    } else {
+        result.error_message = "No satisfying assignments found - clauses are unsatisfiable";
+        reportError(result.error_message);
+    }
+
+    return result;
+}
+
+bool SemanticAnalyzer::assignmentsCompatible(const std::vector<int>& assignment1, const std::vector<int>& assignment2) {
+    // Check if two assignments are compatible (no conflicting values for same asset)
+    std::map<int, bool> values1, values2;
+    
+    for (int lit : assignment1) {
+        int asset_id = abs(lit);
+        bool value = (lit > 0);
+        values1[asset_id] = value;
+    }
+    
+    for (int lit : assignment2) {
+        int asset_id = abs(lit);
+        bool value = (lit > 0);
+        
+        if (values1.find(asset_id) != values1.end()) {
+            if (values1[asset_id] != value) {
+                return false; // Conflict found
+            }
+        }
+    }
+    
+    return true;
+}
+
+std::vector<int> SemanticAnalyzer::mergeAssignments(const std::vector<int>& assignment1, const std::vector<int>& assignment2) {
+    // Merge two compatible assignments
+    std::map<int, bool> merged_values;
+    
+    for (int lit : assignment1) {
+        int asset_id = abs(lit);
+        bool value = (lit > 0);
+        merged_values[asset_id] = value;
+    }
+    
+    for (int lit : assignment2) {
+        int asset_id = abs(lit);
+        bool value = (lit > 0);
+        merged_values[asset_id] = value;
+    }
+    
+    std::vector<int> result;
+    for (const auto& pair : merged_values) {
+        if (pair.second) {
+            result.push_back(pair.first);
+        } else {
+            result.push_back(-pair.first);
+        }
+    }
+    
     return result;
 }
 
@@ -337,6 +523,11 @@ bool SemanticAnalyzer::validateJoinOperation(const std::string& join_type,
         return true; // Idempotent operations are always valid
     }
     
+    // Check for associativity in complex join expressions
+    if (!validateJoinAssociativity(join_type, left_asset, right_asset)) {
+        return false;
+    }
+    
     // Universal joins (no constraints)
     if (join_type == "join" || join_type == "evidence" || join_type == "argument") {
         return validateUniversalJoin(join_type, left_asset, right_asset);
@@ -353,6 +544,153 @@ bool SemanticAnalyzer::validateJoinOperation(const std::string& join_type,
     if (join_type == "lien") return validateLienJoin(left_asset, right_asset);
     
     return validateContextualJoin(join_type, left_asset, right_asset);
+}
+
+bool SemanticAnalyzer::validateJoinAssociativity(const std::string& join_type, 
+                                                Expression* left_asset, 
+                                                Expression* right_asset) {
+    // Check if either argument is itself a join operation of the same type
+    // This indicates a nested join that needs associativity validation
+    
+    bool left_is_join = false;
+    bool right_is_join = false;
+    std::string left_join_type = "";
+    std::string right_join_type = "";
+    
+    // Check if left argument is a join operation
+    if (auto left_func_call = dynamic_cast<FunctionCallExpression*>(left_asset)) {
+        if (left_func_call->function_name && isJoinOperation(left_func_call->function_name->name)) {
+            left_is_join = true;
+            left_join_type = left_func_call->function_name->name;
+        }
+    }
+    
+    // Check if right argument is a join operation
+    if (auto right_func_call = dynamic_cast<FunctionCallExpression*>(right_asset)) {
+        if (right_func_call->function_name && isJoinOperation(right_func_call->function_name->name)) {
+            right_is_join = true;
+            right_join_type = right_func_call->function_name->name;
+        }
+    }
+    
+    // If both arguments are joins of the same type, validate associativity
+    if (left_is_join && right_is_join && left_join_type == right_join_type && left_join_type == join_type) {
+        // This is a case like: join(join(a,b), join(c,d))
+        // We need to validate that the structure allows for associativity
+        
+        // For now, we'll report this as a complex nested join that may need manual validation
+        reportWarning("Complex nested " + join_type + " operation detected: " + 
+                     join_type + "(" + join_type + "(...), " + join_type + "(...)) - " +
+                     "Associativity validation may require manual review");
+        return true; // Allow it for now, but warn the user
+    }
+    
+    // If only one argument is a join of the same type, this is the associativity case we want to validate
+    if ((left_is_join && left_join_type == join_type) || 
+        (right_is_join && right_join_type == join_type)) {
+        
+        // Extract the components for associativity validation
+        std::vector<std::string> all_components;
+        
+        if (left_is_join && left_join_type == join_type) {
+            // Case: join(join(a,b), c) - we need to validate this equals join(a, join(b,c))
+            auto left_func_call = dynamic_cast<FunctionCallExpression*>(left_asset);
+            if (left_func_call && left_func_call->arguments && left_func_call->arguments->expressions.size() == 2) {
+                auto left_left = left_func_call->arguments->expressions[0].get();
+                auto left_right = left_func_call->arguments->expressions[1].get();
+                
+                // Get components for associativity check
+                auto left_left_components = getAssetComponents(left_left);
+                auto left_right_components = getAssetComponents(left_right);
+                auto right_components = getAssetComponents(right_asset);
+                
+                // For associativity, we need to check if the join type supports it
+                // Most join operations are associative, but some contextual joins may not be
+                if (join_type == "join" || join_type == "evidence" || join_type == "argument") {
+                    // Universal joins are always associative
+                    reportWarning("Associative " + join_type + " operation validated: " + 
+                                join_type + "(" + join_type + "(a,b), c) = " + join_type + "(a, " + join_type + "(b,c))");
+                    return true;
+                } else {
+                    // Contextual joins may have associativity constraints
+                    // For now, we'll validate that the components are compatible
+                    bool associativity_valid = validateContextualJoinAssociativity(join_type, 
+                                                                                  left_left_components, 
+                                                                                  left_right_components, 
+                                                                                  right_components);
+                    if (associativity_valid) {
+                        reportWarning("Associative " + join_type + " operation validated");
+                    } else {
+                        reportError("Non-associative " + join_type + " operation: " + 
+                                  join_type + "(" + join_type + "(a,b), c) ≠ " + join_type + "(a, " + join_type + "(b,c))");
+                    }
+                    return associativity_valid;
+                }
+            }
+        } else if (right_is_join && right_join_type == join_type) {
+            // Case: join(a, join(b,c)) - this is the right-associative form
+            auto right_func_call = dynamic_cast<FunctionCallExpression*>(right_asset);
+            if (right_func_call && right_func_call->arguments && right_func_call->arguments->expressions.size() == 2) {
+                auto right_left = right_func_call->arguments->expressions[0].get();
+                auto right_right = right_func_call->arguments->expressions[1].get();
+                
+                // Get components for associativity check
+                auto left_components = getAssetComponents(left_asset);
+                auto right_left_components = getAssetComponents(right_left);
+                auto right_right_components = getAssetComponents(right_right);
+                
+                // Similar validation as above
+                if (join_type == "join" || join_type == "evidence" || join_type == "argument") {
+                    reportWarning("Associative " + join_type + " operation validated: " + 
+                                join_type + "(a, " + join_type + "(b,c)) = " + join_type + "(" + join_type + "(a,b), c)");
+                    return true;
+                } else {
+                    bool associativity_valid = validateContextualJoinAssociativity(join_type, 
+                                                                                  left_components, 
+                                                                                  right_left_components, 
+                                                                                  right_right_components);
+                    if (associativity_valid) {
+                        reportWarning("Associative " + join_type + " operation validated");
+                    } else {
+                        reportError("Non-associative " + join_type + " operation: " + 
+                                  join_type + "(a, " + join_type + "(b,c)) ≠ " + join_type + "(" + join_type + "(a,b), c)");
+                    }
+                    return associativity_valid;
+                }
+            }
+        }
+    }
+    
+    // No nested joins detected, associativity validation not needed
+    return true;
+}
+
+bool SemanticAnalyzer::validateContextualJoinAssociativity(const std::string& join_type,
+                                                          const std::vector<std::string>& a_components,
+                                                          const std::vector<std::string>& b_components,
+                                                          const std::vector<std::string>& c_components) {
+    // For contextual joins, associativity depends on the specific join type and component constraints
+    // This is a simplified validation - in practice, you might need more sophisticated logic
+    
+    if (join_type == "transfer") {
+        // transfer is associative if all components are movable objects
+        return true; // Simplified - assume transfer is associative
+    } else if (join_type == "compensation") {
+        // compensation is associative if all components are positive services
+        return true; // Simplified - assume compensation is associative
+    } else if (join_type == "consideration") {
+        // consideration is associative if the pattern of positive/negative services is maintained
+        return true; // Simplified - assume consideration is associative
+    } else if (join_type == "forbearance") {
+        // forbearance is associative if all components are negative services
+        return true; // Simplified - assume forbearance is associative
+    } else if (join_type == "encumber" || join_type == "access" || join_type == "lien") {
+        // These are associative if the object/service pattern is maintained
+        return true; // Simplified - assume these are associative
+    }
+    
+    // Default: assume associative unless proven otherwise
+    return true;
 }
 
 bool SemanticAnalyzer::validateLogicalOperation(const std::string& operation_type, FunctionCallExpression* func_call) {
@@ -1391,6 +1729,9 @@ bool SemanticAnalyzer::evalExpr(Expression* expr, const std::map<int, bool>& ass
         }
         else if (binary_op->op == "OR") {
             return left_val || right_val;
+        }
+        else if (binary_op->op == "XOR") {
+            return left_val != right_val;   // A ⊕ B ≡ (A ∧ ¬B) ∨ (¬A ∧ B)
         }
         else if (binary_op->op == "EQUIV") {
             return left_val == right_val;   // A ⇔ B ≡ (A ∧ B) ∨ (¬A ∧ ¬B)

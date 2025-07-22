@@ -5,7 +5,7 @@
 
 namespace witness {
 
-Driver::Driver() : lexer(nullptr), program(nullptr), analyzer(std::make_unique<SemanticAnalyzer>()) {}
+Driver::Driver() : lexer(nullptr), program(nullptr), analyzer(std::make_unique<SemanticAnalyzer>()), solverMode("exhaustive") {}
 
 Driver::~Driver() {
     // unique_ptr handles cleanup automatically
@@ -53,6 +53,9 @@ void Driver::analyze() {
         return;
     }
     
+    // Pass solver mode to semantic analyzer
+    analyzer->setSolverMode(solverMode);
+    
     std::cout << "Running semantic analysis..." << std::endl;
     analyzer->analyze(program.get());
 }
@@ -65,6 +68,14 @@ void Driver::print_ast() const {
     
     std::cout << "AST:" << std::endl;
     program->print(std::cout);
+}
+
+void Driver::setSolverMode(const std::string& mode) {
+    solverMode = mode;
+}
+
+std::string Driver::getSolverMode() const {
+    return solverMode;
 }
 
 void Driver::error(const witness::location& l, const std::string& m) {

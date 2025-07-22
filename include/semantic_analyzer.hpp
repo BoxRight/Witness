@@ -55,6 +55,10 @@ public:
     // Main analysis entry point
     void analyze(Program* program);
     
+    // Solver mode management
+    void setSolverMode(const std::string& mode);
+    std::string getSolverMode() const;
+    
     // Check if a function name is a join operation
     bool isJoinOperation(const std::string& function_name) const;
     
@@ -81,6 +85,12 @@ public:
     
     // Truth table generation for satisfiability checking
     SatisfiabilityResult generateTruthTable();
+    SatisfiabilityResult generateExhaustiveTruthTable();
+    SatisfiabilityResult generateExternalSolverTruthTable();
+    
+    // Helper methods for external solver mode
+    bool assignmentsCompatible(const std::vector<int>& assignment1, const std::vector<int>& assignment2);
+    std::vector<int> mergeAssignments(const std::vector<int>& assignment1, const std::vector<int>& assignment2);
     
     // Clause collection for satisfiability checking
     void addClause(const std::string& clause_name, const std::vector<int>& positive_literals, 
@@ -90,6 +100,11 @@ public:
     bool validateJoinOperation(const std::string& join_type, 
                               Expression* left_asset, 
                               Expression* right_asset);
+    bool validateJoinAssociativity(const std::string& join_type, Expression* left_asset, Expression* right_asset);
+    bool validateContextualJoinAssociativity(const std::string& join_type,
+                                           const std::vector<std::string>& a_components,
+                                           const std::vector<std::string>& b_components,
+                                           const std::vector<std::string>& c_components);
     // Helper for per-clause truth table generation
     void collectAssetIDs(Expression* expr, std::set<int>& ids);
     bool evalExpr(Expression* expr, const std::map<int, bool>& assignment);
@@ -114,16 +129,19 @@ private:
     // Symbol table for type definitions
     std::unordered_map<std::string, TypeInfo> symbol_table;
     
+    // Error and warning collections
+    std::vector<std::string> errors;
+    std::vector<std::string> warnings;
+    
+    // Solver mode: "exhaustive" or "external"
+    std::string solverMode;
+    
     // Asset ID tracking for satisfiability checking
     std::unordered_map<std::string, int> asset_to_id;
     int next_asset_id;
     
     // Current clauses for satisfiability checking
     std::vector<ClauseInfo> current_clauses;
-    
-    // Error and warning collections
-    std::vector<std::string> errors;
-    std::vector<std::string> warnings;
     
     // Symbol table management
     void registerTypeDefinition(TypeDefinition* type_def);
