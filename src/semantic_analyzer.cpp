@@ -4,7 +4,7 @@
 #include <cctype>
 #include <cstddef>
 #include <set>
-
+#include <ast.hpp>
 namespace witness {
 
 SemanticAnalyzer::SemanticAnalyzer() {
@@ -55,16 +55,14 @@ int SemanticAnalyzer::getOrAssignAssetID(const std::string& asset_name) {
 }
 
 void SemanticAnalyzer::addClause(const std::string& clause_name, const std::vector<int>& positive_literals, 
-                                 const std::vector<int>& negative_literals, const std::string& expression) {
+                                 const std::vector<int>& negative_literals, const std::string& expression, Expression* expr) {
     ClauseInfo clause;
     clause.name = clause_name;
     clause.positive_literals = positive_literals;
     clause.negative_literals = negative_literals;
     clause.expression = expression;
-    
+    clause.expr = expr;
     current_clauses.push_back(clause);
-    
-    // Debug output
     std::string pos_str = "";
     for (int lit : positive_literals) {
         pos_str += "+" + std::to_string(lit) + " ";
@@ -73,103 +71,78 @@ void SemanticAnalyzer::addClause(const std::string& clause_name, const std::vect
     for (int lit : negative_literals) {
         neg_str += "-" + std::to_string(lit) + " ";
     }
-    
     reportWarning("Clause '" + clause_name + "' added: [" + pos_str + neg_str + "] from '" + expression + "'");
-    // Print the per-clause truth table
     printClauseTruthTable(current_clauses.back());
 }
 
 SemanticAnalyzer::SatisfiabilityResult SemanticAnalyzer::generateTruthTable() {
     SatisfiabilityResult result;
     result.satisfiable = false;
-    
+
     if (current_clauses.empty()) {
         result.satisfiable = true;
         result.assignments.push_back({}); // Empty assignment satisfies no clauses
         return result;
     }
-    
-    // Collect all unique asset IDs used in clauses
+
+    // Collect all unique asset IDs used in all clause expressions
     std::set<int> all_asset_ids;
     for (const auto& clause : current_clauses) {
-        for (int lit : clause.positive_literals) {
-            all_asset_ids.insert(lit);
-        }
-        for (int lit : clause.negative_literals) {
-            all_asset_ids.insert(lit);
-        }
+        collectAssetIDs(clause.expr, all_asset_ids);
     }
-    
     std::vector<int> asset_ids(all_asset_ids.begin(), all_asset_ids.end());
     int num_assets = asset_ids.size();
-    
-    reportWarning("Truth table generation: " + std::to_string(num_assets) + " assets, " + 
-                  std::to_string(current_clauses.size()) + " clauses, " + 
+
+    reportWarning("Truth table generation: " + std::to_string(num_assets) + " assets, " +
+                  std::to_string(current_clauses.size()) + " clauses, " +
                   std::to_string(1 << num_assets) + " combinations to check");
-    
+
     // Generate all possible 2^n truth assignments
     for (int assignment = 0; assignment < (1 << num_assets); assignment++) {
         std::vector<int> current_assignment;
-        
+        std::map<int, bool> assignment_map;
         // Create signed literal assignment
         for (int i = 0; i < num_assets; i++) {
             int asset_id = asset_ids[i];
-            if (assignment & (1 << i)) {
+            bool value = (assignment & (1 << i));
+            assignment_map[asset_id] = value;
+            if (value) {
                 current_assignment.push_back(asset_id);  // Positive literal
             } else {
                 current_assignment.push_back(-asset_id); // Negative literal
             }
         }
-        
-        // Check if this assignment satisfies all clauses
+
+        // Check if this assignment satisfies all clauses (using evalExpr on each clause.expr)
         bool satisfies_all = true;
         for (const auto& clause : current_clauses) {
             bool clause_satisfied = false;
-            
-            // Check positive literals
-            for (int pos_lit : clause.positive_literals) {
-                for (int assigned_lit : current_assignment) {
-                    if (assigned_lit == pos_lit) {
-                        clause_satisfied = true;
-                        break;
-                    }
-                }
-                if (clause_satisfied) break;
+            try {
+                clause_satisfied = evalExpr(clause.expr, assignment_map);
+            } catch (const std::exception& e) {
+                reportError(std::string("[generateTruthTable] Evaluation error: ") + e.what());
+                clause_satisfied = false;
             }
-            
-            // Check negative literals
-            if (!clause_satisfied) {
-                for (int neg_lit : clause.negative_literals) {
-                    for (int assigned_lit : current_assignment) {
-                        if (assigned_lit == -neg_lit) {
-                            clause_satisfied = true;
-                            break;
-                        }
-                    }
-                    if (clause_satisfied) break;
-                }
-            }
-            
             if (!clause_satisfied) {
                 satisfies_all = false;
                 break;
             }
         }
-        
+
         if (satisfies_all) {
             result.assignments.push_back(current_assignment);
         }
     }
-    
+
     result.satisfiable = !result.assignments.empty();
-    
+
     if (result.satisfiable) {
         reportWarning("Truth table generation completed: " + std::to_string(result.assignments.size()) + " satisfying assignments found");
     } else {
         result.error_message = "No satisfying assignments found - clauses are unsatisfiable";
         reportError(result.error_message);
     }
-    
+
     return result;
 }
 
@@ -545,7 +518,7 @@ void SemanticAnalyzer::analyzeClauseExpression(Expression* expr, const std::stri
                     auto arg = func_call->arguments->expressions[0].get();
                     if (auto identifier = dynamic_cast<Identifier*>(arg)) {
                         int asset_id = getOrAssignAssetID(identifier->name);
-                        addClause(clause_name, {asset_id}, {}, function_name + "(" + identifier->name + ")");
+                        addClause(clause_name, {asset_id}, {}, function_name + "(" + identifier->name + ")", expr);
                     }
                 }
             } else if (function_name == "not") {
@@ -554,7 +527,7 @@ void SemanticAnalyzer::analyzeClauseExpression(Expression* expr, const std::stri
                     auto arg = func_call->arguments->expressions[0].get();
                     if (auto identifier = dynamic_cast<Identifier*>(arg)) {
                         int asset_id = getOrAssignAssetID(identifier->name);
-                        addClause(clause_name, {}, {asset_id}, "not(" + identifier->name + ")");
+                        addClause(clause_name, {}, {asset_id}, "not(" + identifier->name + ")", expr);
                     }
                 }
             }
@@ -565,6 +538,9 @@ void SemanticAnalyzer::analyzeClauseExpression(Expression* expr, const std::stri
             // Not a logical operation, analyze normally
             analyzeExpression(expr);
         }
+    } else if (auto bin = dynamic_cast<BinaryOpExpression*>(expr)) {
+        // For binary logical operations, register the clause with the full expression
+        addClause(clause_name, {}, {}, "binary_op", expr);
     } else {
         // Not a function call, analyze normally
         analyzeExpression(expr);
@@ -1303,50 +1279,133 @@ void SemanticAnalyzer::createImplicitActionDefinition(const std::string& action_
 }
 
 void SemanticAnalyzer::printClauseTruthTable(const ClauseInfo& clause) {
-    // Collect all asset IDs used in this clause
-    std::vector<int> asset_ids;
-    for (int id : clause.positive_literals) asset_ids.push_back(id);
-    for (int id : clause.negative_literals) asset_ids.push_back(id);
-    // Remove duplicates
-    std::sort(asset_ids.begin(), asset_ids.end());
-    asset_ids.erase(std::unique(asset_ids.begin(), asset_ids.end()), asset_ids.end());
+    if (!clause.expr) {
+        std::cerr << "[printClauseTruthTable] Error: No expression pointer for clause '" << clause.name << "'.\n";
+        return;
+    }
+    std::set<int> asset_id_set;
+    collectAssetIDs(clause.expr, asset_id_set);
+    std::vector<int> asset_ids(asset_id_set.begin(), asset_id_set.end());
     int n = asset_ids.size();
     if (n == 0) {
         std::cout << "Clause '" << clause.name << "' has no asset variables.\n";
         return;
     }
-    // Print header
     std::cout << "\nTruth table for clause '" << clause.name << "':\n";
     for (int id : asset_ids) {
         std::cout << "asset_" << id << "\t";
     }
     std::cout << "| satisfied\n";
-    // Enumerate all 2^n assignments
     for (int assignment = 0; assignment < (1 << n); ++assignment) {
-        std::vector<int> signed_assignment;
+        std::map<int, bool> assignment_map;
         for (int i = 0; i < n; ++i) {
             int id = asset_ids[i];
             bool value = (assignment & (1 << i));
-            signed_assignment.push_back(value ? id : -id);
+            assignment_map[id] = value;
             std::cout << (value ? "+" : "-") << id << "\t";
         }
-        // Check if this assignment satisfies the clause
         bool satisfied = false;
-        // Clause is satisfied if any positive literal is true or any negative literal is false
-        for (int pos : clause.positive_literals) {
-            if (std::find(signed_assignment.begin(), signed_assignment.end(), pos) != signed_assignment.end()) {
-                satisfied = true;
-                break;
-            }
-        }
-        for (int neg : clause.negative_literals) {
-            if (std::find(signed_assignment.begin(), signed_assignment.end(), -neg) != signed_assignment.end()) {
-                satisfied = true;
-                break;
-            }
+        try {
+            satisfied = evalExpr(clause.expr, assignment_map);
+        } catch (const std::exception& e) {
+            std::cerr << "[printClauseTruthTable] Evaluation error: " << e.what() << "\n";
         }
         std::cout << "| " << (satisfied ? "1" : "0") << "\n";
     }
 }
 
-} // namespace witness 
+
+
+void SemanticAnalyzer::collectAssetIDs(Expression* expr, std::set<int>& ids) {
+    if (!expr) return;
+
+    if (auto identifier = dynamic_cast<Identifier*>(expr)) {
+        // Assign asset ID if not already assigned
+        int asset_id = getOrAssignAssetID(identifier->name);
+        ids.insert(asset_id);
+    }
+    else if (auto func_call = dynamic_cast<FunctionCallExpression*>(expr)) {
+        if (func_call->arguments) {
+            for (const auto& arg : func_call->arguments->expressions) {
+                collectAssetIDs(arg.get(), ids);
+            }
+        }
+    }
+    else if (auto binary_op = dynamic_cast<BinaryOpExpression*>(expr)) {
+        collectAssetIDs(binary_op->left.get(), ids);
+        collectAssetIDs(binary_op->right.get(), ids);
+    }
+    else if (auto unary_op = dynamic_cast<UnaryOpExpression*>(expr)) {
+        collectAssetIDs(unary_op->operand.get(), ids);
+    }
+    // Add other expression types as needed (ExpressionList, etc.)
+}
+
+bool SemanticAnalyzer::evalExpr(Expression* expr, const std::map<int, bool>& assignment) {
+    if (!expr) return false;
+    
+    if (auto identifier = dynamic_cast<Identifier*>(expr)) {
+        // Look up asset ID and return its value from assignment
+        auto it = asset_to_id.find(identifier->name);
+        if (it != asset_to_id.end()) {
+            int asset_id = it->second;
+            auto assignment_it = assignment.find(asset_id);
+            if (assignment_it != assignment.end()) {
+                return assignment_it->second;
+            }
+        }
+        return false; // Asset not found in assignment
+    }
+    else if (auto func_call = dynamic_cast<FunctionCallExpression*>(expr)) {
+        std::string function_name = func_call->function_name->name;
+        
+        if (function_name == "oblig" || function_name == "claim") {
+            // oblig(asset) and claim(asset) return the asset's value
+            if (func_call->arguments && func_call->arguments->expressions.size() == 1) {
+                return evalExpr(func_call->arguments->expressions[0].get(), assignment);
+            }
+        }
+        else if (function_name == "not") {
+            // not(expr) returns the negation of expr
+            if (func_call->arguments && func_call->arguments->expressions.size() == 1) {
+                return !evalExpr(func_call->arguments->expressions[0].get(), assignment);
+            }
+        }
+        return false;
+    }
+    else if (auto binary_op = dynamic_cast<BinaryOpExpression*>(expr)) {
+        bool left_val = evalExpr(binary_op->left.get(), assignment);
+        bool right_val = evalExpr(binary_op->right.get(), assignment);
+        
+        // Handle different binary operators based on your TokenType enum
+        if (binary_op->op == "IMPLIES") {
+            return !left_val || right_val;  // A ⇒ B ≡ ¬A ∨ B
+        }
+        else if (binary_op->op == "AND") {
+            return left_val && right_val;
+        }
+        else if (binary_op->op == "OR") {
+            return left_val || right_val;
+        }
+        else if (binary_op->op == "EQUIV") {
+            return left_val == right_val;   // A ⇔ B ≡ (A ∧ B) ∨ (¬A ∧ ¬B)
+        }
+        
+        return false; // Unknown operator
+    }
+    else if (auto unary_op = dynamic_cast<UnaryOpExpression*>(expr)) {
+        bool operand_val = evalExpr(unary_op->operand.get(), assignment);
+        
+        // Handle unary operators
+        if (unary_op->op == "not") {
+            return !operand_val;
+        }
+        
+        return false; // Unknown operator
+    }
+    
+    return false; // Default case
+}
+
+
+}

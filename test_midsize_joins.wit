@@ -1,0 +1,26 @@
+// Parties
+subject alice = "Alice";
+subject bob = "Bob";
+
+// Object and Service
+action sell_bike = "sell", bike;
+action pay_price = "pay", price;
+object bike = "bicycle", movable;
+service price = "payment", positive;
+
+// Assets
+asset sale = alice, sell_bike, bob;
+asset payment = bob, pay_price, alice;
+
+// Join operations
+asset transfer_sale = transfer(sale, payment); // Should be valid: reciprocal pattern, both movable
+asset compensation = compensation(payment, payment); // Both positive service
+
+// Clauses
+clause sale_obligation = oblig(sale);
+clause payment_obligation = oblig(payment);
+clause contract_enforced = transfer_sale IMPLIES oblig(payment);
+clause penalty_due = not(payment) IMPLIES oblig(compensation);
+
+// Global check
+asset check = global(); 

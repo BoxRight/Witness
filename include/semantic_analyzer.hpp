@@ -8,6 +8,8 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <utility>
+#include <set>
+#include <map>
 
 namespace witness {
 
@@ -40,6 +42,7 @@ public:
         std::vector<int> positive_literals;      // Asset IDs that must be true
         std::vector<int> negative_literals;      // Asset IDs that must be false
         std::string expression;                  // Original expression string
+        Expression* expr = nullptr;              // Pointer to the actual clause expression
     };
     
     struct SatisfiabilityResult {
@@ -81,12 +84,15 @@ public:
     
     // Clause collection for satisfiability checking
     void addClause(const std::string& clause_name, const std::vector<int>& positive_literals, 
-                   const std::vector<int>& negative_literals, const std::string& expression);
+                   const std::vector<int>& negative_literals, const std::string& expression, Expression* expr);
     
     // Validate join operation semantics
     bool validateJoinOperation(const std::string& join_type, 
                               Expression* left_asset, 
                               Expression* right_asset);
+    // Helper for per-clause truth table generation
+    void collectAssetIDs(Expression* expr, std::set<int>& ids);
+    bool evalExpr(Expression* expr, const std::map<int, bool>& assignment);
     
     // Error reporting
     void reportError(const std::string& message);
@@ -191,6 +197,8 @@ private:
     // Type inference helpers
     std::pair<std::string, std::string> inferActionType(const std::string& action_string);
     void createImplicitActionDefinition(const std::string& action_string, const std::string& type, const std::string& constraint);
+
+
 };
 
 } // namespace witness
