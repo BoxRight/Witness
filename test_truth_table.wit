@@ -1,0 +1,34 @@
+// Test file for truth table generation
+
+// Type definitions
+object car = "automobile", "movable";
+service payment = "money", "positive";
+
+// Subject definitions
+subject alice = "Alice";
+subject bob = "Bob";
+
+// Action definitions
+action sell_car = "sell", car;
+action pay_money = "pay", payment;
+
+// Asset definitions
+asset car_sale = alice, sell_car, bob;
+asset payment_service = bob, pay_money, alice;
+
+// Simple clauses for truth table testing
+clause contract_offer = oblig(car_sale);
+clause payment_required = oblig(payment_service);
+clause no_breach = not(car_sale);
+
+// This should create a satisfiable system:
+// car_sale=true, payment_service=true satisfies contract_offer AND payment_required
+// car_sale=false satisfies no_breach
+
+// Expected satisfying assignments:
+// [+1, +2] - car_sale=true, payment_service=true (satisfies contract_offer AND payment_required)
+// [-1, +2] - car_sale=false, payment_service=true (satisfies no_breach)
+// [-1, -2] - car_sale=false, payment_service=false (satisfies no_breach)
+
+// Trigger truth table generation
+asset satisfiability_check = global(); 

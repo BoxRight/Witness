@@ -1,0 +1,95 @@
+// Comprehensive test for contextual join operations
+
+// Type definitions with constraints
+object car = "automobile", "movable";
+object house = "property", "non_movable";
+service payment = "money", "positive";
+service warranty = "guarantee", "positive";
+service non_compete = "restriction", "negative";
+service secrecy = "confidentiality", "negative";
+
+// Basic subject definitions
+subject alice = "Alice";
+subject bob = "Bob";
+subject company = "Corporation";
+
+// Action definitions with proper type references
+action sell_car = "sell", car;
+action sell_house = "sell", house;
+action deliver_car = "deliver", car;
+action pay_money = "pay", payment;
+action provide_warranty = "provide", warranty;
+action receive_warranty = "receive", warranty;
+action abstain_compete = "abstain", non_compete;
+action maintain_secrecy = "maintain", secrecy;
+action receive_secrecy = "receive", secrecy;
+action accept_compete = "accept", non_compete;
+
+// Basic asset definitions using proper actions
+asset car_sale = alice, sell_car, bob;
+asset car_delivery = bob, deliver_car, alice;
+asset house_sale = alice, sell_house, bob;
+asset payment_service = bob, pay_money, alice;
+asset warranty_service = alice, provide_warranty, bob;
+asset warranty_receipt = bob, receive_warranty, alice;
+asset non_compete_service = bob, abstain_compete, alice;
+asset non_compete_acceptance = alice, accept_compete, bob;
+asset secrecy_service = alice, maintain_secrecy, bob;
+asset secrecy_receipt = bob, receive_secrecy, alice;
+
+// Test universal joins (should all work)
+asset universal_join = join(car_sale, payment_service);
+asset evidence_chain = evidence(car_sale, payment_service);
+asset legal_argument = argument(evidence_chain, universal_join);
+
+// Test valid contextual joins
+
+// transfer: movable object ↔ movable object (reciprocal)
+asset valid_transfer = transfer(car_sale, car_delivery);
+
+// sell: object action ↔ positive service action (reciprocal)
+asset valid_sell = sell(car_sale, payment_service);
+
+// compensation: positive service ↔ positive service (reciprocal)
+asset valid_compensation = compensation(payment_service, warranty_service);
+
+// consideration: positive service ↔ negative service (reciprocal)
+asset valid_consideration = consideration(payment_service, non_compete_acceptance);
+
+// forbearance: negative service ↔ negative service (reciprocal)
+asset valid_forbearance = forbearance(non_compete_service, secrecy_service);
+
+// encumber: non-movable object ↔ positive service (reciprocal)
+asset valid_encumber = encumber(house_sale, payment_service);
+
+// access: non-movable object ↔ positive service (reciprocal)
+asset valid_access = access(house_sale, warranty_receipt);
+
+// lien: non-movable object ↔ negative service (reciprocal)
+asset valid_lien = lien(house_sale, non_compete_service);
+
+// Test invalid contextual joins (should generate errors)
+
+// transfer with non-movable object (should fail)
+asset invalid_transfer = transfer(house_sale, car_sale);
+
+// sell with service-service (should fail)
+asset invalid_sell = sell(payment_service, warranty_service);
+
+// compensation with negative service (should fail)
+asset invalid_compensation = compensation(payment_service, non_compete_service);
+
+// consideration with both positive (should fail)
+asset invalid_consideration = consideration(payment_service, warranty_service);
+
+// forbearance with positive service (should fail)
+asset invalid_forbearance = forbearance(payment_service, non_compete_service);
+
+// encumber with movable object (should fail)
+asset invalid_encumber = encumber(car_sale, payment_service);
+
+// access with negative service (should fail)
+asset invalid_access = access(house_sale, non_compete_service);
+
+// lien with positive service (should fail)
+asset invalid_lien = lien(house_sale, payment_service); 

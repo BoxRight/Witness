@@ -75,6 +75,10 @@ statement:
     | asset_definition { $$ = $1; }
     | clause_definition { $$ = $1; }
     | SEMICOLON { $$ = nullptr; /* Ignore empty statements */ }
+    | error SEMICOLON { 
+        std::cerr << "Error recovery: Invalid statement syntax" << std::endl;
+        $$ = nullptr; 
+    }
     ;
 
 type_keyword:
@@ -88,14 +92,26 @@ type_keyword:
 
 type_definition:
     type_keyword identifier_expr EQUALS expression_list SEMICOLON { $$ = new TypeDefinition($1, std::unique_ptr<Identifier>($2), std::unique_ptr<ExpressionList>($4)); }
+    | type_keyword identifier_expr EQUALS error SEMICOLON { 
+        std::cerr << "Error recovery: Invalid type definition for " << $2->name << std::endl;
+        $$ = new TypeDefinition($1, std::unique_ptr<Identifier>($2), std::make_unique<ExpressionList>()); 
+    }
     ;
 
 asset_definition:
     ASSET identifier_expr EQUALS expression_list SEMICOLON { $$ = new AssetDefinition(std::unique_ptr<Identifier>($2), std::unique_ptr<ExpressionList>($4)); }
+    | ASSET identifier_expr EQUALS error SEMICOLON { 
+        std::cerr << "Error recovery: Invalid asset definition for " << $2->name << std::endl;
+        $$ = new AssetDefinition(std::unique_ptr<Identifier>($2), std::make_unique<ExpressionList>()); 
+    }
     ;
 
 clause_definition:
     CLAUSE identifier_expr EQUALS expression SEMICOLON { $$ = new ClauseDefinition(std::unique_ptr<Identifier>($2), std::unique_ptr<Expression>($4)); }
+    | CLAUSE identifier_expr EQUALS error SEMICOLON { 
+        std::cerr << "Error recovery: Invalid clause definition for " << $2->name << std::endl;
+        $$ = new ClauseDefinition(std::unique_ptr<Identifier>($2), std::make_unique<Identifier>("error_recovery")); 
+    }
     ;
 
 expression:
@@ -109,10 +125,22 @@ expression:
     | expression EQUIV expression       { $$ = new BinaryOpExpression("EQUIV", std::unique_ptr<Expression>($1), std::unique_ptr<Expression>($3)); }
     | NOT expression                    { $$ = new UnaryOpExpression("NOT", std::unique_ptr<Expression>($2)); }
     | LPAREN expression RPAREN          { $$ = $2; }
+    | LPAREN error RPAREN               { 
+        std::cerr << "Error recovery: Invalid expression in parentheses" << std::endl;
+        $$ = new Identifier("error_recovery"); 
+    }
     ;
 
 function_call:
     identifier_expr LPAREN opt_expression_list RPAREN { $$ = new FunctionCallExpression(std::unique_ptr<Identifier>($1), std::unique_ptr<ExpressionList>($3)); }
+    | identifier_expr LPAREN error RPAREN { 
+        std::cerr << "Error recovery: Invalid function call arguments for " << $1->name << std::endl;
+        $$ = new FunctionCallExpression(std::unique_ptr<Identifier>($1), std::make_unique<ExpressionList>()); 
+    }
+    | identifier_expr LPAREN opt_expression_list error { 
+        std::cerr << "Error recovery: Missing closing parenthesis for function " << $1->name << std::endl;
+        $$ = new FunctionCallExpression(std::unique_ptr<Identifier>($1), std::unique_ptr<ExpressionList>($3)); 
+    }
     ;
 
 opt_expression_list:
@@ -127,6 +155,10 @@ identifier_expr:
 expression_list:
     expression { $$ = new ExpressionList(); $$->addExpression(std::unique_ptr<Expression>($1)); }
     | expression_list COMMA expression { $1->addExpression(std::unique_ptr<Expression>($3)); $$ = $1; }
+    | expression_list COMMA error { 
+        std::cerr << "Error recovery: Invalid expression in list" << std::endl;
+        $$ = $1; 
+    }
     ;
 
 %%

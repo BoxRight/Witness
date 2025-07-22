@@ -1,0 +1,22 @@
+// Test file to demonstrate type inference for inline string actions
+
+// Define some basic types
+subject alice = "Alice";
+subject bob = "Bob";
+object house = "house", non_movable;
+object car = "car", movable;
+service money = "money", positive;
+
+// Assets with inline string actions that should be inferred
+asset sale_transaction = alice, "sell", bob;          // "sell" should be inferred as movable object
+asset payment_transaction = bob, "pay", alice;       // "pay" should be inferred as positive service
+asset delivery_transaction = alice, "deliver", bob;   // "deliver" should be inferred as movable object
+asset ownership_transaction = alice, "own", bob;      // "own" should be inferred as non_movable object
+asset restrict_transaction = alice, "forbid", bob;    // "forbid" should be inferred as negative service
+
+// Test join operations with inferred types
+asset test_sell_join = sell(sale_transaction, payment_transaction);
+asset test_compensation = compensation(payment_transaction, delivery_transaction);
+
+// Test clause with inferred actions
+clause test_clause = oblig(sale_transaction) AND oblig(payment_transaction); 

@@ -1,0 +1,43 @@
+// Test file for idempotency validation: join(x, x) = x
+
+// Type definitions
+object car = "automobile", "movable";
+object house = "property", "non_movable";
+service payment = "money", "positive";
+service warranty = "guarantee", "positive";
+
+// Subject definitions
+subject alice = "Alice";
+subject bob = "Bob";
+
+// Action definitions
+action sell_car = "sell", car;
+action pay_money = "pay", payment;
+action provide_warranty = "provide", warranty;
+
+// Asset definitions
+asset car_sale = alice, sell_car, bob;
+asset payment_service = bob, pay_money, alice;
+asset warranty_service = alice, provide_warranty, bob;
+
+// Test idempotency for all join operations
+
+// Universal joins - should show idempotency warnings
+asset idempotent_join = join(car_sale, car_sale);
+asset idempotent_evidence = evidence(payment_service, payment_service);
+asset idempotent_argument = argument(warranty_service, warranty_service);
+
+// Contextual joins - should show idempotency warnings
+asset idempotent_transfer = transfer(car_sale, car_sale);
+asset idempotent_sell = sell(car_sale, car_sale);
+asset idempotent_compensation = compensation(payment_service, payment_service);
+asset idempotent_consideration = consideration(payment_service, payment_service);
+asset idempotent_forbearance = forbearance(payment_service, payment_service);
+asset idempotent_encumber = encumber(car_sale, car_sale);
+asset idempotent_access = access(car_sale, car_sale);
+asset idempotent_lien = lien(car_sale, car_sale);
+
+// Non-idempotent operations - should proceed with normal validation
+asset non_idempotent_join = join(car_sale, payment_service);
+asset non_idempotent_evidence = evidence(car_sale, warranty_service);
+asset non_idempotent_argument = argument(payment_service, warranty_service); 

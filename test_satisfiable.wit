@@ -1,0 +1,19 @@
+// Satisfiable test case
+object car = "automobile", movable;
+service payment = "money", positive;
+
+subject alice = "Alice";
+subject bob = "Bob";
+
+action sell_car = "sell", car;
+action pay_money = "pay", payment;
+
+asset car_sale = alice, sell_car, bob;
+asset payment_service = bob, pay_money, alice;
+
+// Consistent clauses (no contradiction)
+clause contract_offer = oblig(car_sale);
+clause payment_required = oblig(payment_service);
+clause contract_logic = oblig(car_sale) IMPLIES oblig(payment_service);
+
+asset satisfiability_check = global(); 

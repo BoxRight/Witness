@@ -733,158 +733,230 @@ namespace witness {
 #line 734 "build/parser.tab.cpp"
     break;
 
-  case 9: // type_keyword: OBJECT
-#line 81 "src/parser.ypp"
-              { yylhs.value.as < std::string > () = "object"; }
-#line 740 "build/parser.tab.cpp"
+  case 9: // statement: error SEMICOLON
+#line 78 "src/parser.ypp"
+                      { 
+        std::cerr << "Error recovery: Invalid statement syntax" << std::endl;
+        yylhs.value.as < Statement* > () = nullptr; 
+    }
+#line 743 "build/parser.tab.cpp"
     break;
 
-  case 10: // type_keyword: SERVICE
-#line 82 "src/parser.ypp"
-                { yylhs.value.as < std::string > () = "service"; }
-#line 746 "build/parser.tab.cpp"
-    break;
-
-  case 11: // type_keyword: ACTION
-#line 83 "src/parser.ypp"
-                { yylhs.value.as < std::string > () = "action"; }
-#line 752 "build/parser.tab.cpp"
-    break;
-
-  case 12: // type_keyword: SUBJECT
-#line 84 "src/parser.ypp"
-                { yylhs.value.as < std::string > () = "subject"; }
-#line 758 "build/parser.tab.cpp"
-    break;
-
-  case 13: // type_keyword: AUTHORITY
+  case 10: // type_keyword: OBJECT
 #line 85 "src/parser.ypp"
-                { yylhs.value.as < std::string > () = "authority"; }
-#line 764 "build/parser.tab.cpp"
+              { yylhs.value.as < std::string > () = "object"; }
+#line 749 "build/parser.tab.cpp"
     break;
 
-  case 14: // type_keyword: TIME
+  case 11: // type_keyword: SERVICE
 #line 86 "src/parser.ypp"
-                { yylhs.value.as < std::string > () = "time"; }
-#line 770 "build/parser.tab.cpp"
+                { yylhs.value.as < std::string > () = "service"; }
+#line 755 "build/parser.tab.cpp"
     break;
 
-  case 15: // type_definition: type_keyword identifier_expr EQUALS expression_list SEMICOLON
+  case 12: // type_keyword: ACTION
+#line 87 "src/parser.ypp"
+                { yylhs.value.as < std::string > () = "action"; }
+#line 761 "build/parser.tab.cpp"
+    break;
+
+  case 13: // type_keyword: SUBJECT
+#line 88 "src/parser.ypp"
+                { yylhs.value.as < std::string > () = "subject"; }
+#line 767 "build/parser.tab.cpp"
+    break;
+
+  case 14: // type_keyword: AUTHORITY
+#line 89 "src/parser.ypp"
+                { yylhs.value.as < std::string > () = "authority"; }
+#line 773 "build/parser.tab.cpp"
+    break;
+
+  case 15: // type_keyword: TIME
 #line 90 "src/parser.ypp"
-                                                                  { yylhs.value.as < Statement* > () = new TypeDefinition(yystack_[4].value.as < std::string > (), std::unique_ptr<Identifier>(yystack_[3].value.as < Identifier* > ()), std::unique_ptr<ExpressionList>(yystack_[1].value.as < ExpressionList* > ())); }
-#line 776 "build/parser.tab.cpp"
+                { yylhs.value.as < std::string > () = "time"; }
+#line 779 "build/parser.tab.cpp"
     break;
 
-  case 16: // asset_definition: ASSET identifier_expr EQUALS expression_list SEMICOLON
+  case 16: // type_definition: type_keyword identifier_expr EQUALS expression_list SEMICOLON
 #line 94 "src/parser.ypp"
-                                                           { yylhs.value.as < Statement* > () = new AssetDefinition(std::unique_ptr<Identifier>(yystack_[3].value.as < Identifier* > ()), std::unique_ptr<ExpressionList>(yystack_[1].value.as < ExpressionList* > ())); }
-#line 782 "build/parser.tab.cpp"
+                                                                  { yylhs.value.as < Statement* > () = new TypeDefinition(yystack_[4].value.as < std::string > (), std::unique_ptr<Identifier>(yystack_[3].value.as < Identifier* > ()), std::unique_ptr<ExpressionList>(yystack_[1].value.as < ExpressionList* > ())); }
+#line 785 "build/parser.tab.cpp"
     break;
 
-  case 17: // clause_definition: CLAUSE identifier_expr EQUALS expression SEMICOLON
-#line 98 "src/parser.ypp"
-                                                       { yylhs.value.as < Statement* > () = new ClauseDefinition(std::unique_ptr<Identifier>(yystack_[3].value.as < Identifier* > ()), std::unique_ptr<Expression>(yystack_[1].value.as < Expression* > ())); }
-#line 788 "build/parser.tab.cpp"
-    break;
-
-  case 18: // expression: identifier_expr
-#line 102 "src/parser.ypp"
-                                    { yylhs.value.as < Expression* > () = yystack_[0].value.as < Identifier* > (); }
+  case 17: // type_definition: type_keyword identifier_expr EQUALS error SEMICOLON
+#line 95 "src/parser.ypp"
+                                                          { 
+        std::cerr << "Error recovery: Invalid type definition for " << yystack_[3].value.as < Identifier* > ()->name << std::endl;
+        yylhs.value.as < Statement* > () = new TypeDefinition(yystack_[4].value.as < std::string > (), std::unique_ptr<Identifier>(yystack_[3].value.as < Identifier* > ()), std::make_unique<ExpressionList>()); 
+    }
 #line 794 "build/parser.tab.cpp"
     break;
 
-  case 19: // expression: STRING_LITERAL
-#line 103 "src/parser.ypp"
-                                    { yylhs.value.as < Expression* > () = new StringLiteral(yystack_[0].value.as < std::string > ()); }
+  case 18: // asset_definition: ASSET identifier_expr EQUALS expression_list SEMICOLON
+#line 102 "src/parser.ypp"
+                                                           { yylhs.value.as < Statement* > () = new AssetDefinition(std::unique_ptr<Identifier>(yystack_[3].value.as < Identifier* > ()), std::unique_ptr<ExpressionList>(yystack_[1].value.as < ExpressionList* > ())); }
 #line 800 "build/parser.tab.cpp"
     break;
 
-  case 20: // expression: function_call
-#line 104 "src/parser.ypp"
-                                    { yylhs.value.as < Expression* > () = yystack_[0].value.as < Expression* > (); }
-#line 806 "build/parser.tab.cpp"
+  case 19: // asset_definition: ASSET identifier_expr EQUALS error SEMICOLON
+#line 103 "src/parser.ypp"
+                                                   { 
+        std::cerr << "Error recovery: Invalid asset definition for " << yystack_[3].value.as < Identifier* > ()->name << std::endl;
+        yylhs.value.as < Statement* > () = new AssetDefinition(std::unique_ptr<Identifier>(yystack_[3].value.as < Identifier* > ()), std::make_unique<ExpressionList>()); 
+    }
+#line 809 "build/parser.tab.cpp"
     break;
 
-  case 21: // expression: expression AND expression
-#line 105 "src/parser.ypp"
-                                        { yylhs.value.as < Expression* > () = new BinaryOpExpression("AND", std::unique_ptr<Expression>(yystack_[2].value.as < Expression* > ()), std::unique_ptr<Expression>(yystack_[0].value.as < Expression* > ())); }
-#line 812 "build/parser.tab.cpp"
+  case 20: // clause_definition: CLAUSE identifier_expr EQUALS expression SEMICOLON
+#line 110 "src/parser.ypp"
+                                                       { yylhs.value.as < Statement* > () = new ClauseDefinition(std::unique_ptr<Identifier>(yystack_[3].value.as < Identifier* > ()), std::unique_ptr<Expression>(yystack_[1].value.as < Expression* > ())); }
+#line 815 "build/parser.tab.cpp"
     break;
 
-  case 22: // expression: expression OR expression
-#line 106 "src/parser.ypp"
-                                        { yylhs.value.as < Expression* > () = new BinaryOpExpression("OR", std::unique_ptr<Expression>(yystack_[2].value.as < Expression* > ()), std::unique_ptr<Expression>(yystack_[0].value.as < Expression* > ())); }
-#line 818 "build/parser.tab.cpp"
-    break;
-
-  case 23: // expression: expression XOR expression
-#line 107 "src/parser.ypp"
-                                        { yylhs.value.as < Expression* > () = new BinaryOpExpression("XOR", std::unique_ptr<Expression>(yystack_[2].value.as < Expression* > ()), std::unique_ptr<Expression>(yystack_[0].value.as < Expression* > ())); }
+  case 21: // clause_definition: CLAUSE identifier_expr EQUALS error SEMICOLON
+#line 111 "src/parser.ypp"
+                                                    { 
+        std::cerr << "Error recovery: Invalid clause definition for " << yystack_[3].value.as < Identifier* > ()->name << std::endl;
+        yylhs.value.as < Statement* > () = new ClauseDefinition(std::unique_ptr<Identifier>(yystack_[3].value.as < Identifier* > ()), std::make_unique<Identifier>("error_recovery")); 
+    }
 #line 824 "build/parser.tab.cpp"
     break;
 
-  case 24: // expression: expression IMPLIES expression
-#line 108 "src/parser.ypp"
-                                        { yylhs.value.as < Expression* > () = new BinaryOpExpression("IMPLIES", std::unique_ptr<Expression>(yystack_[2].value.as < Expression* > ()), std::unique_ptr<Expression>(yystack_[0].value.as < Expression* > ())); }
+  case 22: // expression: identifier_expr
+#line 118 "src/parser.ypp"
+                                    { yylhs.value.as < Expression* > () = yystack_[0].value.as < Identifier* > (); }
 #line 830 "build/parser.tab.cpp"
     break;
 
-  case 25: // expression: expression EQUIV expression
-#line 109 "src/parser.ypp"
-                                        { yylhs.value.as < Expression* > () = new BinaryOpExpression("EQUIV", std::unique_ptr<Expression>(yystack_[2].value.as < Expression* > ()), std::unique_ptr<Expression>(yystack_[0].value.as < Expression* > ())); }
+  case 23: // expression: STRING_LITERAL
+#line 119 "src/parser.ypp"
+                                    { yylhs.value.as < Expression* > () = new StringLiteral(yystack_[0].value.as < std::string > ()); }
 #line 836 "build/parser.tab.cpp"
     break;
 
-  case 26: // expression: NOT expression
-#line 110 "src/parser.ypp"
-                                        { yylhs.value.as < Expression* > () = new UnaryOpExpression("NOT", std::unique_ptr<Expression>(yystack_[0].value.as < Expression* > ())); }
+  case 24: // expression: function_call
+#line 120 "src/parser.ypp"
+                                    { yylhs.value.as < Expression* > () = yystack_[0].value.as < Expression* > (); }
 #line 842 "build/parser.tab.cpp"
     break;
 
-  case 27: // expression: LPAREN expression RPAREN
-#line 111 "src/parser.ypp"
-                                        { yylhs.value.as < Expression* > () = yystack_[1].value.as < Expression* > (); }
+  case 25: // expression: expression AND expression
+#line 121 "src/parser.ypp"
+                                        { yylhs.value.as < Expression* > () = new BinaryOpExpression("AND", std::unique_ptr<Expression>(yystack_[2].value.as < Expression* > ()), std::unique_ptr<Expression>(yystack_[0].value.as < Expression* > ())); }
 #line 848 "build/parser.tab.cpp"
     break;
 
-  case 28: // function_call: identifier_expr LPAREN opt_expression_list RPAREN
-#line 115 "src/parser.ypp"
-                                                      { yylhs.value.as < Expression* > () = new FunctionCallExpression(std::unique_ptr<Identifier>(yystack_[3].value.as < Identifier* > ()), std::unique_ptr<ExpressionList>(yystack_[1].value.as < ExpressionList* > ())); }
+  case 26: // expression: expression OR expression
+#line 122 "src/parser.ypp"
+                                        { yylhs.value.as < Expression* > () = new BinaryOpExpression("OR", std::unique_ptr<Expression>(yystack_[2].value.as < Expression* > ()), std::unique_ptr<Expression>(yystack_[0].value.as < Expression* > ())); }
 #line 854 "build/parser.tab.cpp"
     break;
 
-  case 29: // opt_expression_list: %empty
-#line 119 "src/parser.ypp"
-                      { yylhs.value.as < ExpressionList* > () = new ExpressionList(); }
+  case 27: // expression: expression XOR expression
+#line 123 "src/parser.ypp"
+                                        { yylhs.value.as < Expression* > () = new BinaryOpExpression("XOR", std::unique_ptr<Expression>(yystack_[2].value.as < Expression* > ()), std::unique_ptr<Expression>(yystack_[0].value.as < Expression* > ())); }
 #line 860 "build/parser.tab.cpp"
     break;
 
-  case 30: // opt_expression_list: expression_list
-#line 120 "src/parser.ypp"
-                      { yylhs.value.as < ExpressionList* > () = yystack_[0].value.as < ExpressionList* > (); }
+  case 28: // expression: expression IMPLIES expression
+#line 124 "src/parser.ypp"
+                                        { yylhs.value.as < Expression* > () = new BinaryOpExpression("IMPLIES", std::unique_ptr<Expression>(yystack_[2].value.as < Expression* > ()), std::unique_ptr<Expression>(yystack_[0].value.as < Expression* > ())); }
 #line 866 "build/parser.tab.cpp"
     break;
 
-  case 31: // identifier_expr: IDENTIFIER
-#line 124 "src/parser.ypp"
-               { yylhs.value.as < Identifier* > () = new Identifier(yystack_[0].value.as < std::string > ()); }
+  case 29: // expression: expression EQUIV expression
+#line 125 "src/parser.ypp"
+                                        { yylhs.value.as < Expression* > () = new BinaryOpExpression("EQUIV", std::unique_ptr<Expression>(yystack_[2].value.as < Expression* > ()), std::unique_ptr<Expression>(yystack_[0].value.as < Expression* > ())); }
 #line 872 "build/parser.tab.cpp"
     break;
 
-  case 32: // expression_list: expression
-#line 128 "src/parser.ypp"
-               { yylhs.value.as < ExpressionList* > () = new ExpressionList(); yylhs.value.as < ExpressionList* > ()->addExpression(std::unique_ptr<Expression>(yystack_[0].value.as < Expression* > ())); }
+  case 30: // expression: NOT expression
+#line 126 "src/parser.ypp"
+                                        { yylhs.value.as < Expression* > () = new UnaryOpExpression("NOT", std::unique_ptr<Expression>(yystack_[0].value.as < Expression* > ())); }
 #line 878 "build/parser.tab.cpp"
     break;
 
-  case 33: // expression_list: expression_list COMMA expression
-#line 129 "src/parser.ypp"
-                                       { yystack_[2].value.as < ExpressionList* > ()->addExpression(std::unique_ptr<Expression>(yystack_[0].value.as < Expression* > ())); yylhs.value.as < ExpressionList* > () = yystack_[2].value.as < ExpressionList* > (); }
+  case 31: // expression: LPAREN expression RPAREN
+#line 127 "src/parser.ypp"
+                                        { yylhs.value.as < Expression* > () = yystack_[1].value.as < Expression* > (); }
 #line 884 "build/parser.tab.cpp"
     break;
 
+  case 32: // expression: LPAREN error RPAREN
+#line 128 "src/parser.ypp"
+                                        { 
+        std::cerr << "Error recovery: Invalid expression in parentheses" << std::endl;
+        yylhs.value.as < Expression* > () = new Identifier("error_recovery"); 
+    }
+#line 893 "build/parser.tab.cpp"
+    break;
 
-#line 888 "build/parser.tab.cpp"
+  case 33: // function_call: identifier_expr LPAREN opt_expression_list RPAREN
+#line 135 "src/parser.ypp"
+                                                      { yylhs.value.as < Expression* > () = new FunctionCallExpression(std::unique_ptr<Identifier>(yystack_[3].value.as < Identifier* > ()), std::unique_ptr<ExpressionList>(yystack_[1].value.as < ExpressionList* > ())); }
+#line 899 "build/parser.tab.cpp"
+    break;
+
+  case 34: // function_call: identifier_expr LPAREN error RPAREN
+#line 136 "src/parser.ypp"
+                                          { 
+        std::cerr << "Error recovery: Invalid function call arguments for " << yystack_[3].value.as < Identifier* > ()->name << std::endl;
+        yylhs.value.as < Expression* > () = new FunctionCallExpression(std::unique_ptr<Identifier>(yystack_[3].value.as < Identifier* > ()), std::make_unique<ExpressionList>()); 
+    }
+#line 908 "build/parser.tab.cpp"
+    break;
+
+  case 35: // function_call: identifier_expr LPAREN opt_expression_list error
+#line 140 "src/parser.ypp"
+                                                       { 
+        std::cerr << "Error recovery: Missing closing parenthesis for function " << yystack_[3].value.as < Identifier* > ()->name << std::endl;
+        yylhs.value.as < Expression* > () = new FunctionCallExpression(std::unique_ptr<Identifier>(yystack_[3].value.as < Identifier* > ()), std::unique_ptr<ExpressionList>(yystack_[1].value.as < ExpressionList* > ())); 
+    }
+#line 917 "build/parser.tab.cpp"
+    break;
+
+  case 36: // opt_expression_list: %empty
+#line 147 "src/parser.ypp"
+                      { yylhs.value.as < ExpressionList* > () = new ExpressionList(); }
+#line 923 "build/parser.tab.cpp"
+    break;
+
+  case 37: // opt_expression_list: expression_list
+#line 148 "src/parser.ypp"
+                      { yylhs.value.as < ExpressionList* > () = yystack_[0].value.as < ExpressionList* > (); }
+#line 929 "build/parser.tab.cpp"
+    break;
+
+  case 38: // identifier_expr: IDENTIFIER
+#line 152 "src/parser.ypp"
+               { yylhs.value.as < Identifier* > () = new Identifier(yystack_[0].value.as < std::string > ()); }
+#line 935 "build/parser.tab.cpp"
+    break;
+
+  case 39: // expression_list: expression
+#line 156 "src/parser.ypp"
+               { yylhs.value.as < ExpressionList* > () = new ExpressionList(); yylhs.value.as < ExpressionList* > ()->addExpression(std::unique_ptr<Expression>(yystack_[0].value.as < Expression* > ())); }
+#line 941 "build/parser.tab.cpp"
+    break;
+
+  case 40: // expression_list: expression_list COMMA expression
+#line 157 "src/parser.ypp"
+                                       { yystack_[2].value.as < ExpressionList* > ()->addExpression(std::unique_ptr<Expression>(yystack_[0].value.as < Expression* > ())); yylhs.value.as < ExpressionList* > () = yystack_[2].value.as < ExpressionList* > (); }
+#line 947 "build/parser.tab.cpp"
+    break;
+
+  case 41: // expression_list: expression_list COMMA error
+#line 158 "src/parser.ypp"
+                                  { 
+        std::cerr << "Error recovery: Invalid expression in list" << std::endl;
+        yylhs.value.as < ExpressionList* > () = yystack_[2].value.as < ExpressionList* > (); 
+    }
+#line 956 "build/parser.tab.cpp"
+    break;
+
+
+#line 960 "build/parser.tab.cpp"
 
             default:
               break;
@@ -1077,95 +1149,110 @@ namespace witness {
 
 
 
-  const signed char Parser::yypact_ninf_ = -24;
+  const signed char Parser::yypact_ninf_ = -26;
 
-  const signed char Parser::yytable_ninf_ = -1;
+  const signed char Parser::yytable_ninf_ = -37;
 
   const signed char
   Parser::yypact_[] =
   {
-     -24,    11,    23,   -24,   -24,   -24,   -24,   -24,   -24,   -24,
-     -24,    15,    15,   -24,    15,   -24,   -24,   -24,   -24,    22,
-      32,    38,    -2,    -2,    -2,   -24,    -2,    -2,   -10,   -24,
-       9,    46,     7,    48,    24,   -24,    -2,    -2,    -2,    -2,
-      -2,    -2,   -24,    -2,   -24,   -24,   -24,   -24,   -24,   -24,
-     -10,   -24,    27,    49,   -10,   -24
+     -26,     1,    69,   -26,    -2,   -26,   -26,   -26,   -26,   -26,
+     -26,   -26,     4,     4,   -26,     4,   -26,   -26,   -26,   -26,
+     -26,     8,    24,    26,     9,    13,    34,     6,   -26,    38,
+      45,    82,   -26,    19,    66,    48,    70,    51,    98,   -26,
+       7,    75,   -26,    45,    45,    45,    45,    45,     5,   -26,
+      42,   -26,   -26,   -26,   -26,   -26,   -26,   -26,   -26,   -26,
+      82,   -26,    25,    22,    44,   -26,    82,   -26,   -26,   -26
   };
 
   const signed char
   Parser::yydefact_[] =
   {
-       3,     0,     2,     1,     8,     9,    10,    11,    12,    13,
-      14,     0,     0,     4,     0,     5,     6,     7,    31,     0,
-       0,     0,     0,     0,     0,    19,     0,     0,    32,    20,
-      18,     0,     0,     0,     0,    26,     0,     0,     0,     0,
-       0,    29,    16,     0,    17,    15,    27,    21,    22,    23,
-      24,    25,     0,    30,    33,    28
+       3,     0,     0,     1,     0,     8,    10,    11,    12,    13,
+      14,    15,     0,     0,     4,     0,     5,     6,     7,     9,
+      38,     0,     0,     0,     0,     0,     0,     0,    23,     0,
+       0,    39,    24,    22,     0,     0,     0,     0,     0,    19,
+       0,     0,    30,     0,     0,     0,     0,     0,     0,    18,
+       0,    21,    20,    17,    16,    32,    31,    25,    26,    27,
+      28,    29,     0,     0,    37,    41,    40,    34,    35,    33
   };
 
   const signed char
   Parser::yypgoto_[] =
   {
-     -24,   -24,   -24,   -24,   -24,   -24,   -24,   -24,   -23,   -24,
-     -24,    36,   -19
+     -26,   -26,   -26,   -26,   -26,   -26,   -26,   -26,   -25,   -26,
+     -26,    39,   -24
   };
 
   const signed char
   Parser::yydefgoto_[] =
   {
-       0,     1,     2,    13,    14,    15,    16,    17,    28,    29,
-      52,    30,    31
+       0,     1,     2,    14,    15,    16,    17,    18,    31,    32,
+      63,    33,    34
   };
 
   const signed char
   Parser::yytable_[] =
   {
-      32,    18,    25,    34,    35,    33,    36,    37,    38,    39,
-      40,     3,    44,    47,    48,    49,    50,    51,    18,    26,
-      54,    27,    53,    36,    37,    38,    39,    40,     4,    22,
-      41,     5,     6,     7,     8,     9,    10,    11,    12,    23,
-      36,    37,    38,    39,    40,    24,    46,    19,    20,    55,
-      21,    42,    43,    45,    43,    43
+      36,     3,    38,    19,    41,    42,    62,    20,    20,    28,
+      27,    39,    20,    28,    35,    24,    20,    28,    57,    58,
+      59,    60,    61,    68,    64,    66,    29,   -36,    30,    55,
+      29,    25,    30,    26,    29,    37,    30,    20,    28,    40,
+      48,    20,    28,    65,    69,    20,    28,    67,    20,    28,
+      50,    21,    22,    51,    23,    29,    53,    30,     0,    29,
+       0,    30,     0,    29,     0,    30,    29,     0,    30,    -2,
+       4,    49,    50,     0,     5,    52,     0,     6,     7,     8,
+       9,    10,    11,    12,    13,     0,    43,    44,    45,    46,
+      47,    43,    44,    45,    46,    47,     0,    56,    43,    44,
+      45,    46,    47,    54,    50
   };
 
   const signed char
   Parser::yycheck_[] =
   {
-      23,     3,     4,    26,    27,    24,    16,    17,    18,    19,
-      20,     0,     5,    36,    37,    38,    39,    40,     3,    21,
-      43,    23,    41,    16,    17,    18,    19,    20,     5,     7,
-      21,     8,     9,    10,    11,    12,    13,    14,    15,     7,
-      16,    17,    18,    19,    20,     7,    22,    11,    12,    22,
-      14,     5,     6,     5,     6,     6
+      25,     0,    26,     5,    29,    30,     1,     3,     3,     4,
+       1,     5,     3,     4,     1,     7,     3,     4,    43,    44,
+      45,    46,    47,     1,    48,    50,    21,    22,    23,    22,
+      21,     7,    23,     7,    21,     1,    23,     3,     4,     1,
+      21,     3,     4,     1,    22,     3,     4,    22,     3,     4,
+       6,    12,    13,     5,    15,    21,     5,    23,    -1,    21,
+      -1,    23,    -1,    21,    -1,    23,    21,    -1,    23,     0,
+       1,     5,     6,    -1,     5,     5,    -1,     8,     9,    10,
+      11,    12,    13,    14,    15,    -1,    16,    17,    18,    19,
+      20,    16,    17,    18,    19,    20,    -1,    22,    16,    17,
+      18,    19,    20,     5,     6
   };
 
   const signed char
   Parser::yystos_[] =
   {
-       0,    25,    26,     0,     5,     8,     9,    10,    11,    12,
-      13,    14,    15,    27,    28,    29,    30,    31,     3,    35,
-      35,    35,     7,     7,     7,     4,    21,    23,    32,    33,
-      35,    36,    32,    36,    32,    32,    16,    17,    18,    19,
-      20,    21,     5,     6,     5,     5,    22,    32,    32,    32,
-      32,    32,    34,    36,    32,    22
+       0,    25,    26,     0,     1,     5,     8,     9,    10,    11,
+      12,    13,    14,    15,    27,    28,    29,    30,    31,     5,
+       3,    35,    35,    35,     7,     7,     7,     1,     4,    21,
+      23,    32,    33,    35,    36,     1,    32,     1,    36,     5,
+       1,    32,    32,    16,    17,    18,    19,    20,    21,     5,
+       6,     5,     5,     5,     5,    22,    22,    32,    32,    32,
+      32,    32,     1,    34,    36,     1,    32,    22,     1,    22
   };
 
   const signed char
   Parser::yyr1_[] =
   {
-       0,    24,    25,    26,    26,    27,    27,    27,    27,    28,
-      28,    28,    28,    28,    28,    29,    30,    31,    32,    32,
-      32,    32,    32,    32,    32,    32,    32,    32,    33,    34,
-      34,    35,    36,    36
+       0,    24,    25,    26,    26,    27,    27,    27,    27,    27,
+      28,    28,    28,    28,    28,    28,    29,    29,    30,    30,
+      31,    31,    32,    32,    32,    32,    32,    32,    32,    32,
+      32,    32,    32,    33,    33,    33,    34,    34,    35,    36,
+      36,    36
   };
 
   const signed char
   Parser::yyr2_[] =
   {
-       0,     2,     1,     0,     2,     1,     1,     1,     1,     1,
-       1,     1,     1,     1,     1,     5,     5,     5,     1,     1,
-       1,     3,     3,     3,     3,     3,     2,     3,     4,     0,
-       1,     1,     1,     3
+       0,     2,     1,     0,     2,     1,     1,     1,     1,     2,
+       1,     1,     1,     1,     1,     1,     5,     5,     5,     5,
+       5,     5,     1,     1,     1,     3,     3,     3,     3,     3,
+       2,     3,     3,     4,     4,     4,     0,     1,     1,     1,
+       3,     3
   };
 
 
@@ -1190,10 +1277,11 @@ namespace witness {
   const unsigned char
   Parser::yyrline_[] =
   {
-       0,    65,    65,    69,    70,    74,    75,    76,    77,    81,
-      82,    83,    84,    85,    86,    90,    94,    98,   102,   103,
-     104,   105,   106,   107,   108,   109,   110,   111,   115,   119,
-     120,   124,   128,   129
+       0,    65,    65,    69,    70,    74,    75,    76,    77,    78,
+      85,    86,    87,    88,    89,    90,    94,    95,   102,   103,
+     110,   111,   118,   119,   120,   121,   122,   123,   124,   125,
+     126,   127,   128,   135,   136,   140,   147,   148,   152,   156,
+     157,   158
   };
 
   void
@@ -1226,9 +1314,9 @@ namespace witness {
 
 #line 25 "src/parser.ypp"
 } // witness
-#line 1230 "build/parser.tab.cpp"
+#line 1318 "build/parser.tab.cpp"
 
-#line 132 "src/parser.ypp"
+#line 164 "src/parser.ypp"
 
 
 // Error reporting function

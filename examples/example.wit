@@ -86,6 +86,18 @@ asset transferencia_legal = notario, transferir, registro_propiedad;
 asset confidencialidad_vendedor = vendedor, mantener, comprador;
 asset restriccion_venta = vendedor, abstenerse, comprador;
 
+// ==================== NEW RECIPROCAL ASSETS FOR VALID JOINS ====================
+
+/* Reciprocal Assets for Compensation */
+action brindar_servicio = "provide", comision_inmobiliaria;
+asset servicio_inmobiliario = inmobiliaria, brindar_servicio, vendedor;
+
+/* Reciprocal Assets for Forbearance */
+asset confidencialidad_comprador = comprador, mantener, vendedor;
+
+/* Reciprocal Assets for Encumber */
+asset pago_vendedor = comprador, pagar, vendedor;
+
 // ==================== CONTRACT VALIDITY CLAUSES ====================
 
 /* Basic Contract Formation */
@@ -115,17 +127,17 @@ asset transferencia_inmobiliaria = transfer(entrega_escritura, recepcion_escritu
 /* Commercial Sale */
 asset compraventa = sell(venta_casa, pago_precio);
 
-/* Service Compensation */
-asset compensacion_servicios = compensation(pago_comision, transferencia_legal);
+/* Service Compensation - Now with reciprocal pattern */
+asset compensacion_servicios = compensation(pago_comision, servicio_inmobiliario);
 
 /* Mixed Obligations */
 asset consideracion_mixta = consideration(pago_precio, confidencialidad_vendedor);
 
-/* Forbearance Agreement */
-asset abstencion_mutua = forbearance(confidencialidad_vendedor, restriccion_venta);
+/* Forbearance Agreement - Now with reciprocal pattern */
+asset abstencion_mutua = forbearance(confidencialidad_vendedor, confidencialidad_comprador);
 
-/* Property Encumbrance */
-asset gravamen_propiedad = encumber(venta_casa, pago_impuestos);
+/* Property Encumbrance - Now with reciprocal pattern */
+asset gravamen_propiedad = encumber(venta_casa, pago_vendedor);
 
 // ==================== BREACH SCENARIO ====================
 

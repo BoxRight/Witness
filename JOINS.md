@@ -1,12 +1,14 @@
-# Witness Join Operations Reference
+# Witness Operations Reference
 
-This document provides a comprehensive reference for all join operations available in the Witness programming language.
+This document provides a comprehensive reference for all operations available in the Witness programming language.
 
 ## Overview
 
-Witness provides two categories of join operations:
+Witness provides four categories of operations:
 1. **Universal Join**: Works on all assets regardless of type
 2. **Contextual Joins**: Domain-specific operations with type constraints and semantic rules
+3. **System Operations**: Global analysis and domain-specific aggregation operations
+4. **Logical Operations**: Logical constructs for building legal clauses and assertions
 
 All join operations maintain the fundamental algebraic properties:
 - **Idempotency**: `join(x, x) = x` (via symbol table identity)
@@ -375,6 +377,222 @@ asset complete_argument = argument(legal_argument, precedent_case);
 
 ---
 
+## System Operations
+
+System operations provide global analysis and domain-specific aggregation capabilities.
+
+### `global()`
+
+**Domain**: Global program state  
+**Arguments**: None  
+**Type Checking**: None  
+**Semantics**: Performs satisfiability checking and generates validity witness
+
+#### Rules
+```witness
+global():
+    // Analyzes all clauses and assets in current scope
+    // Performs satisfiability checking
+    // Returns validity witness asset if satisfiable
+    // Triggers truth table generation
+```
+
+#### Example
+```witness
+clause offer = oblig(seller_offer);
+clause acceptance = oblig(buyer_acceptance);
+clause consideration = oblig(payment) AND oblig(delivery);
+
+asset contract_valid = global();
+// Checks satisfiability of all clauses
+// Generates truth table for analysis
+```
+
+#### Use Cases
+- Contract validity verification
+- Legal consistency checking
+- Satisfiability analysis
+- Truth table generation
+
+### `domain(asset1, asset2, ...)`
+
+**Domain**: Related legal concepts  
+**Arguments**: Multiple assets or clauses  
+**Type Checking**: Compatible asset types  
+**Semantics**: Aggregates related legal concepts for domain analysis
+
+#### Rules
+```witness
+domain(assets...):
+    // Analyzes relationships between domain-specific assets
+    // Groups related legal concepts
+    // Returns aggregated domain analysis
+```
+
+#### Example
+```witness
+asset capacity_analysis = domain(
+    procedural_capacity_valid,
+    substantive_capacity_valid,
+    temporal_capacity_valid
+);
+```
+
+#### Use Cases
+- Multi-factor legal analysis
+- Capacity determination
+- Related obligation grouping
+
+### `litis(asset1, asset2)`
+
+**Domain**: Litigation and dispute resolution  
+**Arguments**: Two opposing legal positions  
+**Type Checking**: Compatible legal claims  
+**Semantics**: Models adversarial legal proceedings
+
+#### Rules
+```witness
+litis(claim_a, claim_b):
+    // Models litigation between opposing claims
+    // Analyzes adversarial positions
+    // Returns litigation analysis asset
+```
+
+#### Example
+```witness
+asset breach_claim = plaintiff, allege_breach, defendant;
+asset defense_claim = defendant, deny_breach, plaintiff;
+
+asset litigation = litis(breach_claim, defense_claim);
+```
+
+#### Use Cases
+- Dispute modeling
+- Adversarial analysis
+- Litigation strategy
+
+### `meet(asset1, asset2)`
+
+**Domain**: Asset intersection  
+**Arguments**: Two assets with common elements  
+**Type Checking**: Compatible asset structures  
+**Semantics**: Extracts common elements from legal structures
+
+#### Rules
+```witness
+meet(asset_a, asset_b):
+    // Finds intersection of legal obligations
+    // Extracts common elements
+    // Returns minimal common structure
+```
+
+#### Example
+```witness
+asset common_obligations = meet(
+    contract_obligations,
+    statutory_obligations
+);
+```
+
+#### Use Cases
+- Common obligation extraction
+- Legal requirement intersection
+- Minimal compliance determination
+
+---
+
+## Logical Operations
+
+Logical operations provide building blocks for constructing legal clauses and assertions.
+
+### `oblig(asset)`
+
+**Domain**: Legal obligations  
+**Arguments**: Single asset representing an obligation  
+**Type Checking**: Valid asset structure  
+**Semantics**: Marks an asset as a legal obligation
+
+#### Rules
+```witness
+oblig(asset):
+    // Creates obligation assertion
+    // Marks asset as required/mandatory
+    // Used in clause construction
+```
+
+#### Example
+```witness
+asset payment_obligation = buyer, pay_money, seller;
+clause contract_term = oblig(payment_obligation);
+
+// In logical expressions
+clause contract = oblig(offer) AND oblig(acceptance) AND oblig(consideration);
+```
+
+#### Use Cases
+- Obligation declaration
+- Contract term specification
+- Legal requirement assertion
+
+### `claim(asset)`
+
+**Domain**: Legal claims  
+**Arguments**: Single asset representing a claim  
+**Type Checking**: Valid asset structure  
+**Semantics**: Marks an asset as a legal claim or assertion
+
+#### Rules
+```witness
+claim(asset):
+    // Creates claim assertion
+    // Marks asset as asserted/claimed
+    // Used in dispute and argumentation
+```
+
+#### Example
+```witness
+asset breach_allegation = plaintiff, allege_breach, defendant;
+clause breach_claim = claim(breach_allegation);
+
+clause dispute = claim(breach_allegation) XOR claim(defense_position);
+```
+
+#### Use Cases
+- Legal claim assertion
+- Dispute position declaration
+- Argumentation structure
+
+### `not(asset)`
+
+**Domain**: Logical negation  
+**Arguments**: Single asset or logical expression  
+**Type Checking**: Valid logical expression  
+**Semantics**: Logical negation of the given asset or expression
+
+#### Rules
+```witness
+not(asset):
+    // Logical negation
+    // Creates complement of logical expression
+    // Used in conditional and breach analysis
+```
+
+#### Example
+```witness
+asset payment_made = buyer, pay_money, seller;
+clause breach_condition = not(payment_made) OR not(delivery_made);
+
+clause contract_valid = oblig(payment_made) AND not(breach_occurred);
+```
+
+#### Use Cases
+- Breach condition modeling
+- Conditional logic
+- Complementary assertions
+- Violation detection
+
+---
+
 ## Error Handling
 
 ### Common Error Conditions
@@ -427,19 +645,26 @@ Error: reciprocal pattern mismatch
 
 ## Summary Table
 
-| Operation | Domain | Pattern | Semantics |
-|-----------|---------|---------|-----------|
-| `join` | Universal | None | Forceful combination |
-| `transfer` | movable ↔ movable | Reciprocal | Physical transfer |
-| `sell` | object ↔ positive service | Reciprocal | Commercial exchange |
-| `compensation` | positive ↔ positive | Reciprocal | Service exchange |
-| `consideration` | positive ↔ negative | Reciprocal | Mixed obligation |
-| `forbearance` | negative ↔ negative | Reciprocal | Mutual abstention |
-| `encumber` | non-movable ↔ positive | Reciprocal | Security interest |
-| `access` | non-movable ↔ positive | Reciprocal | Usage rights |
-| `lien` | non-movable ↔ negative | Reciprocal | Restricted ownership |
-| `evidence` | Universal | None | Evidential support |
-| `argument` | Universal | None | Legal argumentation |
+| Operation | Category | Domain | Pattern | Semantics |
+|-----------|----------|---------|---------|-----------|
+| `join` | Universal Join | Universal | None | Forceful combination |
+| `transfer` | Contextual Join | movable ↔ movable | Reciprocal | Physical transfer |
+| `sell` | Contextual Join | object ↔ positive service | Reciprocal | Commercial exchange |
+| `compensation` | Contextual Join | positive ↔ positive | Reciprocal | Service exchange |
+| `consideration` | Contextual Join | positive ↔ negative | Reciprocal | Mixed obligation |
+| `forbearance` | Contextual Join | negative ↔ negative | Reciprocal | Mutual abstention |
+| `encumber` | Contextual Join | non-movable ↔ positive | Reciprocal | Security interest |
+| `access` | Contextual Join | non-movable ↔ positive | Reciprocal | Usage rights |
+| `lien` | Contextual Join | non-movable ↔ negative | Reciprocal | Restricted ownership |
+| `evidence` | Universal Join | Universal | None | Evidential support |
+| `argument` | Universal Join | Universal | None | Legal argumentation |
+| `global()` | System Operation | Global state | None | Satisfiability checking |
+| `domain()` | System Operation | Related concepts | Multiple assets | Domain aggregation |
+| `litis()` | System Operation | Adversarial | Two claims | Litigation modeling |
+| `meet()` | System Operation | Asset intersection | Two assets | Common elements |
+| `oblig()` | Logical Operation | Obligations | Single asset | Obligation assertion |
+| `claim()` | Logical Operation | Claims | Single asset | Claim assertion |
+| `not()` | Logical Operation | Negation | Single expression | Logical negation |
 
 ---
 

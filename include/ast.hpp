@@ -93,6 +93,43 @@ public:
         properties->print(os);
         os << ";";
     }
+    
+    // Helper methods for type checking
+    bool isObjectType() const { return type_keyword == "object"; }
+    bool isServiceType() const { return type_keyword == "service"; }
+    bool isActionType() const { return type_keyword == "action"; }
+    bool isSubjectType() const { return type_keyword == "subject"; }
+    bool isAuthorityType() const { return type_keyword == "authority"; }
+    bool isTimeType() const { return type_keyword == "time"; }
+    
+    // Get constraint from properties (e.g., "movable", "positive", "negative")
+    std::string getConstraint() const {
+        if (!properties || properties->expressions.empty()) {
+            return "";
+        }
+        
+        // Look for constraint in the properties
+        for (const auto& prop : properties->expressions) {
+            if (auto str_lit = dynamic_cast<StringLiteral*>(prop.get())) {
+                if (str_lit->value == "movable" || str_lit->value == "non_movable" ||
+                    str_lit->value == "positive" || str_lit->value == "negative") {
+                    return str_lit->value;
+                }
+            }
+            // Also check for identifiers (e.g., Identifier(negative))
+            else if (auto identifier = dynamic_cast<Identifier*>(prop.get())) {
+                if (identifier->name == "movable" || identifier->name == "non_movable" ||
+                    identifier->name == "positive" || identifier->name == "negative") {
+                    return identifier->name;
+                }
+            }
+        }
+        
+        // Default constraints based on type
+        if (isObjectType()) return "movable";  // Default for objects
+        if (isServiceType()) return "positive"; // Default for services
+        return "";
+    }
 };
 
 // Represents an asset definition

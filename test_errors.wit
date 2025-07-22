@@ -1,0 +1,28 @@
+// Test file with intentional syntax errors to test error recovery
+
+// Valid definition
+object casa = "house", movable;
+
+// Missing semicolon
+object escritura = "deed", movable
+
+// Invalid expression in type definition
+service precio = invalid_expression_here, positive;
+
+// Missing closing parenthesis in function call
+asset test_asset = global(;
+
+// Invalid clause definition
+clause test_clause = missing_right_side;
+
+// Valid definition after errors
+subject vendedor = "seller";
+
+// Missing comma in expression list
+asset another_test = vendedor "sell" comprador;
+
+// Missing closing parenthesis in nested expression
+clause nested_test = oblig(venta_casa AND (missing_paren;
+
+// Valid definition at the end
+time plazo = 30, within; 

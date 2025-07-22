@@ -1,0 +1,38 @@
+// Test file for lazy asset ID assignment
+
+// Type definitions
+object car = "automobile", "movable";
+service payment = "money", "positive";
+service warranty = "guarantee", "positive";
+
+// Subject definitions
+subject alice = "Alice";
+subject bob = "Bob";
+
+// Action definitions
+action sell_car = "sell", car;
+action pay_money = "pay", payment;
+action provide_warranty = "provide", warranty;
+
+// Asset definitions - these should NOT get IDs yet
+asset car_sale = alice, sell_car, bob;
+asset payment_service = bob, pay_money, alice;
+asset warranty_service = alice, provide_warranty, bob;
+asset unused_asset = alice, provide_warranty, bob;
+
+// Join operations - these should NOT get IDs yet
+asset combined_sale = join(car_sale, payment_service);
+
+// Logical operations - these SHOULD trigger ID assignment
+clause contract_terms = oblig(car_sale);
+clause payment_required = oblig(payment_service); 
+clause warranty_claimed = claim(warranty_service);
+
+// Negative operations - should create negative literals
+clause no_breach = not(unused_asset);
+
+// Mixed clause with AND/OR - should assign IDs to all referenced assets
+clause complex_contract = oblig(combined_sale);
+
+// Note: unused_asset should NOT get an ID (except when used in not() above)
+// combined_sale should get an ID when used in complex_contract 

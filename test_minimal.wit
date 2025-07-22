@@ -1,0 +1,6 @@
+// Minimal test file to isolate memory issues
+ 
+object test_obj = "test", "movable";
+subject alice = "Alice";
+action test_action = "test", test_obj;
+asset test_asset = alice, test_action, alice; 
