@@ -24,3 +24,11 @@ clause penalty_due = not(payment) IMPLIES oblig(compensation);
 
 // Global check
 asset check = global(); 
+
+clause sale_obligation_new = oblig(sale);
+clause payment_obligation_new = oblig(payment);
+clause contract_enforced_new = transfer_sale IMPLIES oblig(payment);
+clause penalty_due_new = not(payment) IMPLIES oblig(compensation);
+clause contradiction = not(payment) AND oblig(payment);
+
+asset check_again = global();

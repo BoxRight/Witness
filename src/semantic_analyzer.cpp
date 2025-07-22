@@ -1076,11 +1076,16 @@ bool SemanticAnalyzer::validateGlobalOperation(FunctionCallExpression* func_call
             assignment_str += "]";
             reportWarning(assignment_str);
         }
+        std::cout << "Global check SATISFIABLE" << std::endl;
     } else {
         reportError("global() operation failed - system is unsatisfiable: " + result.error_message);
+        std::cout << "Global check UNSATISFIABLE: " << result.error_message << std::endl;
         return false;
     }
     
+    // Reset clause set for next global block
+    current_clauses.clear();
+    reportWarning("Clause set reset after global() operation.");
     return true;
 }
 
