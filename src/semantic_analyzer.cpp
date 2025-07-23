@@ -5,6 +5,10 @@
 #include <cstddef>
 #include <set>
 #include <ast.hpp>
+#include <sstream>
+#include <fstream>
+#include <cstdlib>
+
 namespace witness {
 
 SemanticAnalyzer::SemanticAnalyzer() {
@@ -87,6 +91,47 @@ void SemanticAnalyzer::addClause(const std::string& clause_name, const std::vect
 }
 
 SemanticAnalyzer::SatisfiabilityResult SemanticAnalyzer::generateTruthTable() {
+    if (solverMode == "external") {
+        generateExternalSolverTruthTable();
+        
+        // Read results from CUDA solver
+        std::ifstream result_file("zdd.bin", std::ios::binary);
+        if (!result_file.is_open()) {
+            SatisfiabilityResult result;
+            result.satisfiable = false;
+            result.error_message = "External solver mode: Could not read CUDA solver results";
+            return result;
+        }
+        
+        SatisfiabilityResult result;
+        result.satisfiable = false;
+        
+        // Read combinations from binary file
+        while (result_file.good()) {
+            int size;
+            result_file.read(reinterpret_cast<char*>(&size), sizeof(int));
+            if (result_file.eof()) break;
+            
+            if (size > 0 && size <= 1000) { // Sanity check
+                std::vector<int> combination(size);
+                result_file.read(reinterpret_cast<char*>(combination.data()), size * sizeof(int));
+                if (result_file.good()) {
+                    result.assignments.push_back(combination);
+                }
+            }
+        }
+        result_file.close();
+        
+        result.satisfiable = !result.assignments.empty();
+        if (result.satisfiable) {
+            result.error_message = "External solver mode: " + std::to_string(result.assignments.size()) + " satisfying assignments found";
+        } else {
+            result.error_message = "External solver mode: No satisfying assignments found";
+        }
+        
+        return result;
+    }
+
     SatisfiabilityResult result;
     result.satisfiable = false;
 
@@ -99,9 +144,6 @@ SemanticAnalyzer::SatisfiabilityResult SemanticAnalyzer::generateTruthTable() {
     if (solverMode == "exhaustive") {
         // Use current exhaustive approach
         return generateExhaustiveTruthTable();
-    } else if (solverMode == "external") {
-        // Use external solver approach with set-based clause representation
-        return generateExternalSolverTruthTable();
     } else {
         reportError("Unknown solver mode: " + solverMode);
         return result;
@@ -179,105 +221,97 @@ SemanticAnalyzer::SatisfiabilityResult SemanticAnalyzer::generateExhaustiveTruth
     return result;
 }
 
-SemanticAnalyzer::SatisfiabilityResult SemanticAnalyzer::generateExternalSolverTruthTable() {
-    SatisfiabilityResult result;
-    result.satisfiable = false;
-
-    if (current_clauses.empty()) {
-        result.satisfiable = true;
-        result.assignments.push_back({}); // Empty assignment satisfies no clauses
-        return result;
-    }
-
-    // Collect all unique asset IDs used in all clause expressions
-    std::set<int> all_asset_ids;
-    for (const auto& clause : current_clauses) {
-        collectAssetIDs(clause.expr, all_asset_ids);
-    }
-    std::vector<int> asset_ids(all_asset_ids.begin(), all_asset_ids.end());
-    int num_assets = asset_ids.size();
-
-    reportWarning("External solver mode: " + std::to_string(num_assets) + " assets, " +
-                  std::to_string(current_clauses.size()) + " clauses");
-
-    // Generate sets of satisfying assignments for each clause
-    std::vector<std::vector<std::vector<int>>> clause_satisfying_assignments;
+void SemanticAnalyzer::exportForCudaSolver(const std::vector<std::set<std::vector<int>>>& clause_satisfying_assignments, 
+                                           const std::set<int>& all_asset_ids) {
+    std::cout << "\n=== CUDA SOLVER EXPORT (CudaSet Format) ===" << std::endl;
     
-    for (const auto& clause : current_clauses) {
-        std::vector<std::vector<int>> clause_assignments;
+    // Prepare data for CudaSet structure - TRULY FLATTENED
+    std::vector<int8_t> flattened_data;
+    std::vector<int> offsets;
+    std::vector<int> sizes;
+    
+    int current_offset = 0;
+    std::vector<int> asset_list(all_asset_ids.begin(), all_asset_ids.end());
+    int assets_per_assignment = asset_list.size();
+    
+    for (size_t clause_idx = 0; clause_idx < clause_satisfying_assignments.size(); clause_idx++) {
+        const auto& assignments = clause_satisfying_assignments[clause_idx];
         
-        // Generate all possible assignments for this clause's variables
-        std::set<int> clause_asset_ids;
-        collectAssetIDs(clause.expr, clause_asset_ids);
-        std::vector<int> clause_asset_vector(clause_asset_ids.begin(), clause_asset_ids.end());
-        int clause_num_assets = clause_asset_vector.size();
+        offsets.push_back(current_offset);
+        sizes.push_back(assignments.size());
         
-        for (int assignment = 0; assignment < (1 << clause_num_assets); assignment++) {
-            std::map<int, bool> assignment_map;
-            std::vector<int> current_assignment;
+        // Flatten this clause's assignments into the data array
+        // Each assignment is a fixed-size array of asset values
+        for (const auto& assignment : assignments) {
+            // Create a complete assignment vector for all assets (not just clause assets)
+            std::vector<int8_t> complete_assignment(assets_per_assignment, 0);
             
-            // Create assignment for this clause
-            for (int i = 0; i < clause_num_assets; i++) {
-                int asset_id = clause_asset_vector[i];
-                bool value = (assignment & (1 << i));
-                assignment_map[asset_id] = value;
-                if (value) {
-                    current_assignment.push_back(asset_id);
-                } else {
-                    current_assignment.push_back(-asset_id);
+            // Fill in the values for assets that are in this clause
+            for (size_t i = 0; i < assignment.size(); i++) {
+                int asset_id = std::abs(assignment[i]);
+                int sign = assignment[i] > 0 ? 1 : -1;
+                
+                // Find position of this asset in the global asset list
+                auto it = std::find(asset_list.begin(), asset_list.end(), asset_id);
+                if (it != asset_list.end()) {
+                    int pos = std::distance(asset_list.begin(), it);
+                    complete_assignment[pos] = static_cast<int8_t>(sign * asset_id);
                 }
             }
             
-            // Check if this assignment satisfies the clause
-            try {
-                if (evalExpr(clause.expr, assignment_map)) {
-                    clause_assignments.push_back(current_assignment);
-                }
-            } catch (const std::exception& e) {
-                reportError(std::string("[generateExternalSolverTruthTable] Evaluation error: ") + e.what());
-            }
+            // Add the complete assignment to flattened data
+            flattened_data.insert(flattened_data.end(), complete_assignment.begin(), complete_assignment.end());
         }
         
-        clause_satisfying_assignments.push_back(clause_assignments);
+        current_offset = flattened_data.size();
     }
-
-    // For now, use a simple intersection approach to find global solutions
-    // In a real implementation, this would call an external solver
-    if (!clause_satisfying_assignments.empty()) {
-        // Start with the first clause's assignments
-        std::vector<std::vector<int>> global_assignments = clause_satisfying_assignments[0];
-        
-        // Intersect with each subsequent clause
-        for (size_t i = 1; i < clause_satisfying_assignments.size(); i++) {
-            std::vector<std::vector<int>> new_global_assignments;
-            
-            for (const auto& global_assignment : global_assignments) {
-                for (const auto& clause_assignment : clause_satisfying_assignments[i]) {
-                    // Check if assignments are compatible (simplified intersection)
-                    if (assignmentsCompatible(global_assignment, clause_assignment)) {
-                        // Merge assignments
-                        auto merged = mergeAssignments(global_assignment, clause_assignment);
-                        new_global_assignments.push_back(merged);
-                    }
-                }
-            }
-            
-            global_assignments = new_global_assignments;
-        }
-        
-        result.assignments = global_assignments;
+    
+    // Output in CudaSet-compatible format
+    std::cout << "# CudaSet Format - Copy this data to your CUDA program" << std::endl;
+    std::cout << "# Format: numItems totalElements" << std::endl;
+    std::cout << "# Then: offset1 offset2 ... offsetN" << std::endl;
+    std::cout << "# Then: size1 size2 ... sizeN" << std::endl;
+    std::cout << "# Then: data1 data2 ... dataM" << std::endl;
+    std::cout << std::endl;
+    
+    std::cout << "# Header" << std::endl;
+    std::cout << clause_satisfying_assignments.size() << " " << flattened_data.size() << std::endl;
+    
+    std::cout << "# Offsets" << std::endl;
+    for (int offset : offsets) {
+        std::cout << offset << " ";
     }
-
-    result.satisfiable = !result.assignments.empty();
-
-    if (result.satisfiable) {
-        reportWarning("External solver completed: " + std::to_string(result.assignments.size()) + " satisfying assignments found");
-    } else {
-        result.error_message = "No satisfying assignments found - clauses are unsatisfiable";
-        reportError(result.error_message);
+    std::cout << std::endl;
+    
+    std::cout << "# Sizes" << std::endl;
+    for (int size : sizes) {
+        std::cout << size << " ";
     }
-
-    return result;
+    std::cout << std::endl;
+    
+    std::cout << "# Flattened Data (int8_t values)" << std::endl;
+    for (size_t i = 0; i < flattened_data.size(); i++) {
+        std::cout << static_cast<int>(flattened_data[i]);
+        if (i < flattened_data.size() - 1) std::cout << " ";
+    }
+    std::cout << std::endl;
+    
+    // Also output asset mapping for reference
+    std::cout << std::endl;
+    std::cout << "# Asset ID Mapping (for reference)" << std::endl;
+    for (size_t i = 0; i < asset_list.size(); i++) {
+        std::cout << "Asset " << asset_list[i] << " -> Position " << i << std::endl;
+    }
+    
+    std::cout << std::endl;
+    std::cout << "# CudaSet Structure Summary:" << std::endl;
+    std::cout << "# - numItems: " << clause_satisfying_assignments.size() << std::endl;
+    std::cout << "# - totalElements: " << flattened_data.size() << std::endl;
+    std::cout << "# - Each clause has 'size' assignments" << std::endl;
+    std::cout << "# - Each assignment has " << assets_per_assignment << " values (one per global asset)" << std::endl;
+    std::cout << "# - Positive values = asset is true, negative = asset is false" << std::endl;
+    std::cout << "# - Zero values = asset not involved in this clause" << std::endl;
+    std::cout << "=== END CUDA SOLVER EXPORT ===" << std::endl;
 }
 
 bool SemanticAnalyzer::assignmentsCompatible(const std::vector<int>& assignment1, const std::vector<int>& assignment2) {
@@ -864,8 +898,20 @@ void SemanticAnalyzer::analyzeClauseExpression(Expression* expr, const std::stri
                 if (func_call->arguments && func_call->arguments->expressions.size() == 1) {
                     auto arg = func_call->arguments->expressions[0].get();
                     if (auto identifier = dynamic_cast<Identifier*>(arg)) {
+                        // not(asset_name) - simple case
                         int asset_id = getOrAssignAssetID(identifier->name);
                         addClause(clause_name, {}, {asset_id}, "not(" + identifier->name + ")", expr);
+                    } else if (auto nested_func = dynamic_cast<FunctionCallExpression*>(arg)) {
+                        // not(function_call) - nested case like not(oblig(asset))
+                        std::string nested_func_name = nested_func->function_name->name;
+                        if ((nested_func_name == "oblig" || nested_func_name == "claim") && 
+                            nested_func->arguments && nested_func->arguments->expressions.size() == 1) {
+                            auto nested_arg = nested_func->arguments->expressions[0].get();
+                            if (auto nested_identifier = dynamic_cast<Identifier*>(nested_arg)) {
+                                int asset_id = getOrAssignAssetID(nested_identifier->name);
+                                addClause(clause_name, {}, {asset_id}, "not(" + nested_func_name + "(" + nested_identifier->name + "))", expr);
+                            }
+                        }
                     }
                 }
             }
@@ -1753,5 +1799,187 @@ bool SemanticAnalyzer::evalExpr(Expression* expr, const std::map<int, bool>& ass
     return false; // Default case
 }
 
+void SemanticAnalyzer::generateExternalSolverTruthTable() {
+    if (current_clauses.empty()) {
+        std::cout << "No clauses to process for external solver." << std::endl;
+        return;
+    }
 
+    // Collect all unique asset IDs from all clauses
+    std::set<int> all_asset_ids;
+    for (const auto& clause : current_clauses) {
+        std::set<int> clause_asset_ids;
+        collectAssetIDs(clause.expr, clause_asset_ids);
+        all_asset_ids.insert(clause_asset_ids.begin(), clause_asset_ids.end());
+    }
+    std::vector<int> asset_list(all_asset_ids.begin(), all_asset_ids.end());
+    int assets_per_assignment = asset_list.size();
+
+    std::cout << "\n=== EXTERNAL SOLVER DEBUG: Clause Sets ===" << std::endl;
+    std::vector<std::set<std::vector<int>>> clause_satisfying_assignments;
+    
+    for (size_t clause_idx = 0; clause_idx < current_clauses.size(); clause_idx++) {
+        const auto& clause = current_clauses[clause_idx];
+        std::set<int> clause_asset_ids;
+        collectAssetIDs(clause.expr, clause_asset_ids);
+        
+        std::set<std::vector<int>> clause_assignments;
+        
+        // Generate all possible assignments for this clause's assets
+        std::vector<int> asset_list_clause(clause_asset_ids.begin(), clause_asset_ids.end());
+        int num_combinations = 1 << asset_list_clause.size();
+        
+        for (int i = 0; i < num_combinations; i++) {
+            std::map<int, bool> assignment;
+            for (size_t j = 0; j < asset_list_clause.size(); j++) {
+                assignment[asset_list_clause[j]] = (i >> j) & 1;
+            }
+            
+            if (evalExpr(clause.expr, assignment)) {
+                std::vector<int> satisfying_assignment;
+                for (int asset_id : asset_list_clause) {
+                    satisfying_assignment.push_back(assignment[asset_id] ? asset_id : -asset_id);
+                }
+                clause_assignments.insert(satisfying_assignment);
+            }
+        }
+        
+        std::cout << "\nClause " << (clause_idx + 1) << ": '" << clause.name << "'" << std::endl;
+        std::cout << "  Expression: " << clause.expression << std::endl;
+        std::cout << "  Asset IDs: [";
+        for (auto it = clause_asset_ids.begin(); it != clause_asset_ids.end(); ++it) {
+            if (it != clause_asset_ids.begin()) std::cout << ", ";
+            std::cout << *it;
+        }
+        std::cout << "]" << std::endl;
+        std::cout << "  Satisfying assignments:" << std::endl;
+        for (const auto& assignment : clause_assignments) {
+            std::cout << "    [";
+            for (size_t i = 0; i < assignment.size(); i++) {
+                if (i > 0) std::cout << ", ";
+                std::cout << assignment[i];
+            }
+            std::cout << "]" << std::endl;
+        }
+        std::cout << "  Total satisfying assignments: " << clause_assignments.size() << std::endl;
+        clause_satisfying_assignments.push_back(clause_assignments);
+    }
+    
+    std::cout << "\n=== SOLVER INTERFACE INPUT ===" << std::endl;
+    std::cout << "Number of clauses: " << clause_satisfying_assignments.size() << std::endl;
+    for (size_t i = 0; i < clause_satisfying_assignments.size(); i++) {
+        std::cout << "Clause " << (i + 1) << " set size: " << clause_satisfying_assignments[i].size() << std::endl;
+    }
+    std::cout << "===============================" << std::endl;
+    
+    // Export data for CUDA solver (CudaSet format)
+    exportForCudaSolver(clause_satisfying_assignments, all_asset_ids);
+
+    // --- JSON Export and CUDA Solver Execution ---
+    std::cout << "\n=== JSON EXPORT FOR CUDA ===" << std::endl;
+    std::ostringstream json;
+    json << "{\n  \"assets\": [";
+    for (size_t i = 0; i < asset_list.size(); ++i) {
+        if (i > 0) json << ", ";
+        json << asset_list[i];
+    }
+    json << "],\n  \"clauses\": [\n";
+    for (size_t clause_idx = 0; clause_idx < clause_satisfying_assignments.size(); ++clause_idx) {
+        const auto& clause = current_clauses[clause_idx];
+        const auto& assignments = clause_satisfying_assignments[clause_idx];
+        // Get the asset list for this clause
+        std::set<int> clause_asset_ids;
+        collectAssetIDs(clause.expr, clause_asset_ids);
+        std::vector<int> clause_asset_list(clause_asset_ids.begin(), clause_asset_ids.end());
+        json << "    {\n      \"name\": \"" << clause.name << "\",\n      \"asset_ids\": [";
+        for (size_t i = 0; i < clause_asset_list.size(); ++i) {
+            if (i > 0) json << ", ";
+            json << clause_asset_list[i];
+        }
+        json << "],\n      \"assignments\": [\n";
+        size_t assign_count = 0;
+        for (const auto& assignment : assignments) {
+            json << "        [";
+            for (size_t j = 0; j < assignment.size(); ++j) {
+                if (j > 0) json << ", ";
+                json << assignment[j];
+            }
+            json << "]";
+            assign_count++;
+            if (assign_count < assignments.size()) json << ",";
+            json << "\n";
+        }
+        json << "      ]\n    }";
+        if (clause_idx < clause_satisfying_assignments.size() - 1) json << ",";
+        json << "\n";
+    }
+    json << "  ]\n}";
+    
+    // Write JSON to file
+    std::string json_filename = "witness_export.json";
+    std::ofstream json_file(json_filename);
+    if (json_file.is_open()) {
+        json_file << json.str();
+        json_file.close();
+        std::cout << "JSON exported to " << json_filename << std::endl;
+    } else {
+        std::cerr << "Error: Could not write JSON to " << json_filename << std::endl;
+        return;
+    }
+    
+    // Call CUDA solver
+    std::cout << "\n=== CALLING CUDA SOLVER ===" << std::endl;
+    std::string cuda_command = "./tree_fold_cuda " + json_filename;
+    std::cout << "Executing: " << cuda_command << std::endl;
+    
+    int result = system(cuda_command.c_str());
+    if (result != 0) {
+        std::cerr << "Error: CUDA solver returned exit code " << result << std::endl;
+        return;
+    }
+    
+    // Read results from CUDA solver
+    std::cout << "\n=== READING CUDA SOLVER RESULTS ===" << std::endl;
+    std::ifstream result_file("zdd.bin", std::ios::binary);
+    if (!result_file.is_open()) {
+        std::cerr << "Error: Could not open result file zdd.bin" << std::endl;
+        return;
+    }
+    
+    std::vector<std::vector<int>> final_combinations;
+    while (result_file.good()) {
+        int size;
+        result_file.read(reinterpret_cast<char*>(&size), sizeof(int));
+        if (result_file.eof()) break;
+        
+        if (size > 0 && size <= 1000) { // Sanity check
+            std::vector<int> combination(size);
+            result_file.read(reinterpret_cast<char*>(combination.data()), size * sizeof(int));
+            if (result_file.good()) {
+                final_combinations.push_back(combination);
+            }
+        }
+    }
+    result_file.close();
+    
+    std::cout << "CUDA solver found " << final_combinations.size() << " satisfying combinations" << std::endl;
+    
+    // Display first few results
+    std::cout << "\n=== FIRST 10 SATISFYING COMBINATIONS ===" << std::endl;
+    for (size_t i = 0; i < std::min(final_combinations.size(), size_t(10)); ++i) {
+        std::cout << "Combination " << (i + 1) << ": [";
+        for (size_t j = 0; j < final_combinations[i].size(); ++j) {
+            if (j > 0) std::cout << ", ";
+            std::cout << final_combinations[i][j];
+        }
+        std::cout << "]" << std::endl;
+    }
+    
+    if (final_combinations.size() > 10) {
+        std::cout << "... and " << (final_combinations.size() - 10) << " more combinations" << std::endl;
+    }
+    
+    std::cout << "=== END CUDA SOLVER RESULTS ===" << std::endl;
 }
+
+} // namespace witness

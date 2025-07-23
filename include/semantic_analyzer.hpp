@@ -86,7 +86,9 @@ public:
     // Truth table generation for satisfiability checking
     SatisfiabilityResult generateTruthTable();
     SatisfiabilityResult generateExhaustiveTruthTable();
-    SatisfiabilityResult generateExternalSolverTruthTable();
+    void exportForCudaSolver(const std::vector<std::set<std::vector<int>>>& clause_satisfying_assignments, 
+                             const std::set<int>& all_asset_ids);
+    void generateExternalSolverTruthTable();
     
     // Helper methods for external solver mode
     bool assignmentsCompatible(const std::vector<int>& assignment1, const std::vector<int>& assignment2);

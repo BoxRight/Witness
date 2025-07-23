@@ -1,0 +1,19 @@
+{
+  "assets": [1, 2],
+  "clauses": [
+    {
+      "name": "clause3",
+      "asset_ids": [1],
+      "assignments": [
+        [-1]
+      ]
+    },
+    {
+      "name": "clause4",
+      "asset_ids": [2],
+      "assignments": [
+        [2]
+      ]
+    }
+  ]
+}

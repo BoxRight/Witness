@@ -1,0 +1,31 @@
+// Test clause reset functionality with multiple global() operations
+
+// Parties
+subject alice = "Alice";
+subject bob = "Bob";
+
+// Objects and Services
+object bike = "bicycle", movable;
+service payment = "money", positive;
+
+// Actions
+action sell_bike = "sell", bike;
+action pay = "pay", payment;
+
+// Assets
+asset bike_sale = alice, sell_bike, bob;
+asset payment1 = bob, pay, alice;
+
+// First set of clauses
+clause clause1 = oblig(bike_sale);
+clause clause2 = oblig(payment1);
+
+// First global check
+asset check1 = global();
+
+// Second set of clauses (after reset)
+clause clause3 = not(oblig(bike_sale));
+clause clause4 = oblig(payment1);
+
+// Second global check
+asset check2 = global(); 
