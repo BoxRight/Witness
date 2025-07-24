@@ -25,8 +25,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourorg/witness-lang.git
-cd witness-lang
+git clone https://github.com/BoxRight/Witness.git
+cd Witness
 
 # Build the compiler
 make clean && make
@@ -346,8 +346,8 @@ We welcome contributions from both programming language researchers and legal te
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourorg/witness-lang.git
-cd witness-lang
+git clone https://github.com/BoxRight/Witness.git
+cd Witness
 
 # Build the compiler
 make clean && make
@@ -416,8 +416,8 @@ If you use Witness in academic research, please cite:
 
 ## Support and Community
 
-- **Issues**: [GitHub Issues](https://github.com/yourorg/witness-lang/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourorg/witness-lang/discussions)
+- **Issues**: [GitHub Issues](https://github.com/BoxRight/Witness/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/BoxRight/Witness/discussions)
 - **Documentation**: This README and inline code comments
 
 ## Acknowledgments
