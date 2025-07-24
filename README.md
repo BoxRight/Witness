@@ -1,10 +1,10 @@
 # Witness Programming Language
 
-> **A semilattice-based programming language for legal reasoning and contract verification**
+> **A domain-specific language for legal reasoning with satisfiability checking and CUDA acceleration**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Language: Witness](https://img.shields.io/badge/Language-Witness-blue.svg)](#)
-[![Status: Research](https://img.shields.io/badge/Status-Research-orange.svg)](#)
+[![Status: Active Development](https://img.shields.io/badge/Status-Active%20Development-green.svg)](#)
 
 ## Overview
 
@@ -12,12 +12,12 @@
 
 ### Key Features
 
-- 🏗️ **Algebraic Foundation**: Built on semilattice operations with join-based composition
 - ⚖️ **Legal Domain Modeling**: Native support for legal concepts, obligations, and procedural rules
-- 🔍 **Satisfiability-Gated Computation**: Ensures legal consistency before proceeding with operations
-- 🎯 **Contextual Join Operations**: Domain-specific operations for different legal relationship types
-- 📊 **Truth Table Generation**: Automatic generation of satisfiability analyses
-- 🎨 **Visual Representation**: Unified Hasse-ZDD diagrams for legal reasoning visualization
+- 🔍 **Satisfiability Checking**: Built-in exhaustive and CUDA-accelerated satisfiability solvers
+- 🎯 **System Operations**: `global()`, `litis()`, `meet()`, and `domain()` for legal analysis
+- 📊 **Conflict Analysis**: Automatic detection of minimal conflicting sets in unsatisfiable clauses
+- 🚀 **CUDA Acceleration**: GPU-accelerated satisfiability checking for large contracts
+- 🎨 **Verbosity Control**: Clean output with `--quiet` and `--verbose` flags
 
 ## Quick Start
 
@@ -29,30 +29,24 @@ git clone https://github.com/yourorg/witness-lang.git
 cd witness-lang
 
 # Build the compiler
-make build
+make clean && make
 
-# Install system-wide
-sudo make install
+# Optional: Build CUDA solver (requires NVIDIA GPU and CUDA toolkit)
+nvcc -arch=sm_86 -std=c++17 tree_fold_cuda.cu -o tree_fold_cuda -ltbb -lzstd
 ```
 
 ### Hello Legal World
 
-Create a simple contract (`hello.witness`):
+Create a simple contract (`hello.wit`):
 
-```witness
-// Define types
-object money = "payment amount", movable;
-service payment = "financial payment", positive;
-action pay = "make payment", payment;
+```wit
+// Define assets
+asset bike_sale = alice, sell_bike, bob;
+asset payment = bob, pay, alice;
 
-subject buyer = "Alice";
-subject seller = "Bob";
-
-// Create assets
-asset payment_obligation = buyer, pay, seller;
-
-// Define validity
-clause simple_contract = oblig(payment_obligation);
+// Define clauses
+clause clause1 = oblig(bike_sale);
+clause clause2 = oblig(payment);
 
 // Check satisfiability
 asset contract_valid = global();
@@ -61,7 +55,7 @@ asset contract_valid = global();
 Compile and run:
 
 ```bash
-witness --output=truth-table hello.witness
+./witnessc hello.wit
 ```
 
 ## Language Overview
@@ -69,134 +63,157 @@ witness --output=truth-table hello.witness
 ### Core Concepts
 
 **Assets** are the fundamental units representing legal relationships:
-```witness
-asset sale = seller, sell_house, buyer;
-//    ^       ^        ^         ^
-//    name    subject  action    subject
+```wit
+asset bike_sale = alice, sell_bike, bob;
+//    ^          ^       ^          ^
+//    name       subject action     subject
 ```
 
 **Clauses** define logical relationships between assets:
-```witness
-clause contract = oblig(sale) IMPLIES oblig(payment);
+```wit
+clause contract = oblig(bike_sale) IMPLIES oblig(payment);
 ```
 
-**Global Operations** verify satisfiability and create witness assets:
-```witness
+**System Operations** verify satisfiability and create witness assets:
+```wit
 asset valid_contract = global();  // Triggers satisfiability check
 ```
 
-### Type System
+### System Operations
 
-Witness provides rich types for legal modeling:
+Witness provides powerful system operations for legal analysis:
 
-```witness
-// Objects with constraints
-object house = "residential property", non_movable;
-object cash = "payment currency", movable;
+```wit
+// Global satisfiability check
+asset global_check = global();
 
-// Services with directionality  
-service rent = "rental payment", positive;
-service confidentiality = "non-disclosure", negative;
+// Selective satisfiability check for specific assets
+asset litis_check = litis(bike_sale, payment);
 
-// Actions link to objects/services
-action sell = "transfer ownership", house;
-action pay = "provide payment", rent;
+// Greatest common legal denominator extraction
+asset meet_result = meet(contract1, contract2);
 
-// Legal entities
-subject tenant = "John Doe";
-authority court = "Civil Court District 1";
-time deadline = 30, within;
+// Domain analysis for completeness verification
+asset domain_check = domain(asset1, asset2, asset3);
 ```
 
-### Contextual Join Operations
+### Logical Operations
 
-Witness provides domain-specific operations that respect legal semantics:
+Witness provides logical operations for legal reasoning:
 
-```witness
-// Commercial transactions
-asset sale_transaction = sell(property_transfer, cash_payment);
+```wit
+// Obligations
+clause obligation = oblig(bike_sale);
 
-// Service exchanges  
-asset consulting_deal = compensation(legal_advice, accounting_service);
+// Claims
+clause claim = claim(payment);
 
-// Mixed obligations
-asset employment_terms = consideration(salary_payment, non_compete_clause);
+// Negation
+clause prohibition = not(oblig(bike_sale));
 
-// Property rights
-asset mortgage = encumber(house_ownership, loan_security);
-
-// Evidence and argumentation
-asset supported_claim = evidence(contract_breach, witness_testimony);
-asset legal_argument = argument(supported_claim, statutory_authority);
+// Binary operations
+clause conditional = oblig(bike_sale) IMPLIES oblig(payment);
+clause conjunction = oblig(bike_sale) AND oblig(payment);
+clause disjunction = oblig(bike_sale) OR oblig(payment);
+clause equivalence = oblig(bike_sale) EQUIV oblig(payment);
 ```
 
 ## Advanced Features
 
-### Satisfiability-Gated Computation
+### Satisfiability Checking
 
-Witness ensures legal consistency through satisfiability checking:
+Witness provides two satisfiability checking modes:
 
-```witness
-// Basic contract clauses
-clause offer = oblig(seller_offer);
-clause acceptance = oblig(buyer_acceptance);
-clause consideration = oblig(payment) AND oblig(delivery);
-
-// Check if contract formation is satisfiable
-asset contract_formation = global();
-
-// Only if satisfiable, proceed with breach analysis
-clause breach_analysis = contract_formation IMPLIES (
-    not(payment) OR not(delivery)
-);
+#### Exhaustive Solver (Default)
+```bash
+./witnessc test_file.wit
 ```
 
-### Evidence and Argument Construction
-
-Build complex legal arguments through composition:
-
-```witness
-// Gather evidence
-asset contract_document = notary, present_document, court;
-asset witness_testimony = witness, testify, court;
-asset expert_opinion = expert, provide_analysis, court;
-
-// Build evidence chain
-asset evidence_chain = evidence(
-    evidence(contract_document, witness_testimony),
-    expert_opinion
-);
-
-// Construct legal argument
-asset breach_argument = argument(evidence_chain, breach_claim);
-
-// Model adversarial proceedings
-clause dispute = oblig(breach_argument) XOR oblig(defense_argument);
+#### CUDA-Accelerated Solver
+```bash
+./witnessc --solver=external test_file.wit
 ```
 
-### Domain Operations
+### Conflict Analysis
 
-Aggregate related legal concepts:
+When clauses are unsatisfiable, Witness automatically detects minimal conflicting sets:
 
-```witness
-// Analyze multiple related clauses
-asset capacity_analysis = domain(
-    procedural_capacity_valid,
-    substantive_capacity_valid,
-    temporal_capacity_valid
-);
+```wit
+// Conflicting clauses
+clause clause1 = oblig(bike_sale);
+clause clause2 = not(oblig(bike_sale));  // Direct contradiction
+
+asset check = global();  // Will trigger conflict analysis
 ```
 
-### Meet Operations
-
-Extract common elements from complex legal structures:
-
-```witness
-asset common_obligations = meet(
-    contract_obligations,
-    statutory_obligations
-);
+Output:
 ```
+Global check UNSATISFIABLE
+Minimal conflicting set:
+- Clause 'clause1': oblig(bike_sale)
+- Clause 'clause2': not(oblig(bike_sale))
+
+Analysis Results:
+Direct contradiction detected between:
+- Asset 'bike_sale' (positive in clause1, negative in clause2)
+```
+
+### Verbosity Control
+
+Witness provides flexible output control:
+
+```bash
+# Default output (shows warnings and basic info)
+./witnessc test_file.wit
+
+# Quiet mode (only errors and results)
+./witnessc --quiet test_file.wit
+
+# Verbose mode (shows AST, debug info, detailed assignments)
+./witnessc --verbose test_file.wit
+```
+
+### Mixed Operations
+
+You can mix different system operations:
+
+```wit
+// First global check
+clause clause1 = oblig(bike_sale);
+clause clause2 = oblig(payment);
+asset global_check1 = global();
+
+// Then litis check (clause set is reset)
+clause clause3 = not(oblig(bike_sale));
+asset litis_check = litis(bike_sale, payment);
+
+// Another global check (clause set is reset again)
+clause clause4 = oblig(bike_sale);
+asset global_check2 = global();
+```
+
+### Join Operations
+
+Witness supports various join operations for legal relationships:
+
+```wit
+// Universal joins
+asset universal_join = join(asset1, asset2);
+
+// Contextual joins (require reciprocal patterns)
+asset transfer_join = transfer(asset1, asset2);
+asset sell_join = sell(asset1, asset2);
+asset compensation_join = compensation(asset1, asset2);
+asset consideration_join = consideration(asset1, asset2);
+asset forbearance_join = forbearance(asset1, asset2);
+asset encumber_join = encumber(asset1, asset2);
+asset access_join = access(asset1, asset2);
+asset lien_join = lien(asset1, asset2);
+asset evidence_join = evidence(asset1, asset2);
+asset argument_join = argument(asset1, asset2);
+```
+
+**Note**: Contextual joins require reciprocal subject patterns: `(s1,A1,s2) ↔ (s2,A2,s1)`
 
 ## Compilation and Output
 
@@ -204,91 +221,122 @@ asset common_obligations = meet(
 
 ```bash
 # Basic compilation
-witness contract.witness
+./witnessc contract.wit
 
-# Output formats
-witness --output=truth-table contract.witness    # Show satisfiability tables
-witness --output=zdd contract.witness           # Generate ZDD files
-witness --output=proof contract.witness         # Show proof witnesses only
+# Solver modes
+./witnessc --solver=exhaustive contract.wit     # Use built-in exhaustive solver (default)
+./witnessc --solver=external contract.wit       # Use CUDA-accelerated solver
 
-# Error handling
-witness --on-unsat=halt contract.witness        # Stop on unsatisfiable
-witness --on-unsat=persist contract.witness     # Continue despite errors
-witness --on-unsat=check contract.witness       # Check syntax first
+# Verbosity control
+./witnessc --quiet contract.wit                 # Suppress warnings and debug output
+./witnessc --verbose contract.wit               # Show detailed output including AST
 
-# Verbose output
-witness --verbose contract.witness
+# Help
+./witnessc --help                               # Show usage information
 ```
 
-### Truth Table Output
+### Sample Output
 
+#### Satisfiable Case
+```bash
+$ ./witnessc --quiet test_simple.wit
+Global check SATISFIABLE
 ```
-TRUTH TABLE: contract_valid
-offer | acceptance | payment | delivery
-  1   |     1      |    1    |    1
-  1   |     1      |    0    |    0
-  0   |     0      |    0    |    0
 
-TRUTH TABLE: breach_analysis
-payment | delivery | breach_claim
-   1    |    0     |     1
-   0    |    1     |     1
-   0    |    0     |     1
+#### Unsatisfiable Case with Conflict Analysis
+```bash
+$ ./witnessc --quiet test_conflicts.wit
+Global check UNSATISFIABLE
+Minimal conflicting set:
+- Clause 'clause1': oblig(bike_sale)
+- Clause 'clause2': not(oblig(bike_sale))
+
+Analysis Results:
+Direct contradiction detected between:
+- Asset 'bike_sale' (positive in clause1, negative in clause2)
+```
+
+#### Verbose Output
+```bash
+$ ./witnessc --verbose test_file.wit
+Using solver mode: exhaustive
+Parsing successful!
+
+--- AST ---
+[AST structure displayed]
+
+Running semantic analysis...
+Warning: Asset 'bike_sale' assigned ID 1 for satisfiability checking
+Warning: Clause 'clause1' added: [+1 ] from 'oblig(bike_sale)'
+Global check SATISFIABLE
 ```
 
 ## Examples
 
-### Contract Formation
+### Basic Contract
+See [`examples/example.wit`](examples/example.wit) for a simple contract example.
 
-See [`examples/contract_formation.witness`](examples/contract_formation.witness) for a complete contract formation example.
+### Conflict Analysis
+See [`test_conflicts.wit`](test_conflicts.wit) for examples of conflicting clauses and automatic conflict detection.
 
-### Real Estate Transaction
+### System Operations
+See [`test_litis.wit`](test_litis.wit) for examples of `litis()` selective satisfiability checking.
 
-See [`examples/real_estate.witness`](examples/real_estate.witness) for a comprehensive real estate purchase with breach analysis and litigation.
+### Mixed Operations
+See [`test_mixed_operations.wit`](test_mixed_operations.wit) for examples of mixing `global()` and `litis()` operations.
 
-### Employment Agreement
+### Complex Solar Panel Contract
+See [`test_solar_panels.wit`](test_solar_panels.wit) for a comprehensive modular solar lease contract with multiple clauses and system operations.
 
-See [`examples/employment.witness`](examples/employment.witness) for employment contracts with confidentiality and non-compete clauses.
+## Implementation Details
 
-### Litigation Procedure
+### Architecture
 
-See [`examples/litigation.witness`](examples/litigation.witness) for procedural validity checking and court proceedings.
+The Witness compiler is built with:
 
-## Mathematical Foundation
+- **Parser**: Bison-based parser with Flex lexer
+- **Semantic Analyzer**: C++ implementation with satisfiability checking
+- **Conflict Analyzer**: Automatic detection of minimal conflicting sets
+- **CUDA Solver**: GPU-accelerated satisfiability checking for large contracts
+- **JSON Export**: Standard format for external solver communication
 
-Witness is built on solid mathematical principles:
+### Satisfiability Checking
 
-### Semilattice Theory
-- **Universal Join Operation**: Forms a complete semilattice over all assets
-- **Domain-Specific Semilattices**: Each contextual operation forms a semilattice within its domain
-- **Idempotency**: `join(x, x) = x` for all assets
-- **Associativity**: `join(join(a, b), c) = join(a, join(b, c))`
-- **Commutativity**: `join(a, b) = join(b, a)`
+Two modes are supported:
 
-### Constraint Satisfaction
-- **Satisfiability Checking**: Ensures legal consistency before computation
-- **Witness Generation**: Creates proof objects for satisfiable legal states
-- **Error Detection**: Identifies inconsistent legal specifications
+1. **Exhaustive Solver**: Built-in solver that generates all possible truth assignments
+2. **CUDA Solver**: External GPU-accelerated solver using tree-fold algorithm
 
-### Type Theory
-- **Rich Type System**: Objects, services, actions with semantic constraints
-- **Type Preservation**: All operations maintain type invariants
-- **Contextual Constraints**: Domain-specific rules for legal operations
+### File Formats
 
-## Research and Academic Use
+- **Input**: `.wit` files with Witness DSL syntax
+- **Intermediate**: JSON export format for CUDA solver communication
+- **Output**: Binary format for CUDA solver results
 
-Witness represents a novel approach to computational law and legal informatics. Key research contributions:
+## Current Status
 
-1. **Algebraic Legal Modeling**: First language to treat legal relationships as algebraic structures
-2. **Satisfiability-Gated Computation**: Ensures consistency before legal reasoning
-3. **Contextual Join Semantics**: Domain-specific operations respecting legal semantics
-4. **Visual Legal Reasoning**: Unified Hasse-ZDD diagrams for legal structure visualization
+### Implemented Features
 
-### Publications
+✅ **Core Language**: Asset definitions, clauses, logical operations  
+✅ **System Operations**: `global()`, `litis()`  
+✅ **Satisfiability Checking**: Exhaustive and CUDA-accelerated solvers  
+✅ **Conflict Analysis**: Automatic detection of minimal conflicting sets  
+✅ **Verbosity Control**: `--quiet` and `--verbose` flags  
+✅ **Join Operations**: Universal and contextual joins with validation  
+✅ **Error Handling**: Comprehensive error reporting and validation  
 
-- *"Witness: A Semilattice-Based Language for Legal Reasoning"* (forthcoming)
-- *"Satisfiability-Gated Computation in Legal Programming"* (submitted)
-- *"Algebraic Foundations for Computational Law"* (in preparation)
+### In Progress
+
+🔄 **System Operations**: `meet()` and `domain()` implementations  
+🔄 **Advanced Join Validation**: Enhanced reciprocal pattern checking  
+🔄 **Performance Optimization**: CUDA solver improvements  
+
+### Planned Features
+
+📋 **Visualization**: Truth table and conflict diagram generation  
+📋 **Standard Library**: Common legal patterns and templates  
+📋 **IDE Integration**: Syntax highlighting and error checking  
+📋 **Documentation**: Comprehensive language reference
 
 ## Contributing
 
@@ -297,47 +345,56 @@ We welcome contributions from both programming language researchers and legal te
 ### Development Setup
 
 ```bash
-# Clone and setup development environment
+# Clone the repository
 git clone https://github.com/yourorg/witness-lang.git
 cd witness-lang
-make dev-setup
+
+# Build the compiler
+make clean && make
 
 # Run tests
-make test
-
-# Build documentation
-make docs
+./witnessc test_conflicts.wit
+./witnessc test_litis.wit
+./witnessc test_mixed_operations.wit
 ```
 
-### Contribution Guidelines
+### Contribution Areas
 
-1. **Language Design**: Proposals for new legal constructs or operations
-2. **Compiler Implementation**: Parser, type checker, satisfiability solver
-3. **Standard Library**: Common legal patterns and templates
-4. **Documentation**: Examples, tutorials, legal domain explanations
-5. **Research**: Mathematical foundations, formal semantics, legal applications
+1. **Language Features**: New system operations, logical constructs
+2. **Solver Improvements**: Enhanced satisfiability checking algorithms
+3. **Performance**: CUDA optimization, parallel processing
+4. **Documentation**: Examples, tutorials, language reference
+5. **Testing**: Test cases, validation scenarios
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+### Building from Source
+
+Requirements:
+- C++17 compiler (GCC 7+ or Clang 5+)
+- Bison and Flex
+- Make
+- Optional: CUDA toolkit for GPU acceleration
 
 ## Roadmap
 
-### Short Term (6 months)
-- [ ] Complete compiler implementation
+### Short Term (3 months)
+- [x] Core language implementation
+- [x] Basic satisfiability checking
+- [x] Conflict analysis
+- [x] CUDA integration
+- [ ] Complete system operations (`meet()`, `domain()`)
+- [ ] Enhanced error reporting
+
+### Medium Term (6 months)
+- [ ] Visual output generation (truth tables, diagrams)
 - [ ] Standard library of legal patterns
+- [ ] Performance optimization
+- [ ] Comprehensive test suite
+
+### Long Term (1 year)
 - [ ] IDE integration and syntax highlighting
-- [ ] Truth table optimization algorithms
-
-### Medium Term (1 year)
-- [ ] Advanced satisfiability solvers (SMT integration)
-- [ ] Visual diagram generation tools
+- [ ] Advanced satisfiability solvers
 - [ ] Legal template system
-- [ ] Integration with legal databases
-
-### Long Term (2+ years)
-- [ ] Machine learning for legal pattern recognition
-- [ ] Blockchain integration for smart contracts
-- [ ] Natural language to Witness translation
-- [ ] Formal verification tools for legal specifications
+- [ ] Documentation and tutorials
 
 ## License
 
@@ -352,26 +409,24 @@ If you use Witness in academic research, please cite:
   title = {Witness: A Semilattice-Based Programming Language for Legal Reasoning},
   author = {[Author Names]},
   year = {2025},
-  url = {https://github.com/yourorg/witness-lang},
+  url = {https://github.com/BoxRight/Witness},
   version = {0.1.0}
 }
 ```
 
 ## Support and Community
 
-- **Documentation**: [https://witness-lang.org/docs](https://witness-lang.org/docs)
-- **Forum**: [https://forum.witness-lang.org](https://forum.witness-lang.org)
-- **Discord**: [Witness Language Community](https://discord.gg/witness-lang)
 - **Issues**: [GitHub Issues](https://github.com/yourorg/witness-lang/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/yourorg/witness-lang/discussions)
+- **Documentation**: This README and inline code comments
 
 ## Acknowledgments
 
-- Mathematical foundations inspired by lattice theory and universal algebra
-- Legal domain modeling informed by jurisprudential theory and legal informatics
-- Constraint satisfaction techniques from automated theorem proving
-- Visual representation concepts from knowledge graphs and decision diagrams
+- Mathematical foundations inspired by satisfiability checking and constraint satisfaction
+- Legal domain modeling informed by legal informatics and computational law
+- CUDA acceleration techniques from parallel computing and GPU programming
+- Conflict analysis concepts from automated theorem proving and debugging
 
 ---
 
-**Witness**: *Making legal reasoning algebraic, one join at a time.* ⚖️
+**Witness**: *Making legal reasoning computational, one clause at a time.* ⚖️
