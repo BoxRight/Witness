@@ -1,0 +1,260 @@
+// ==========================================
+// MODULAR SOLAR LEASE - SEMANTIC CLUSTERS
+// ==========================================
+
+// ==========================================
+// MODULE 1: CONTRACT FORMATION FOUNDATION
+// ==========================================
+
+// Base types (shared across all modules)
+object sistema_solar = "sistema solar fotovoltaico 8kW", movable;
+service pago_mensual = "pago 2500 MXN", positive;
+service entrega_sistema = "entrega en 60 días", positive;
+
+subject arrendador = "SolarCorp México SA de CV";
+subject arrendatario = "Juan Pérez González";
+
+// Foundation actions
+action arrendar_sistema = "arrendar sistema solar fotovoltaico de 8kW con 20 paneles solares inversor y sistema de monitoreo", sistema_solar;
+action pagar_renta = "pagar renta mensual de 2500.00 MXN en los primeros 5 días de cada mes", pago_mensual;
+action entregar_en_60_dias = "entregar el sistema solar completamente instalado dentro de 60 días naturales", entrega_sistema;
+
+// Foundation assets
+asset contrato_base = arrendador, arrendar_sistema, arrendatario;
+asset obligacion_pago = arrendatario, pagar_renta, arrendador;
+asset obligacion_entrega = arrendador, entregar_en_60_dias, arrendatario;
+
+// Foundation dependency (CORE LEGAL RELATIONSHIP)
+clause formacion_reciproca = oblig(contrato_base) EQUIV oblig(obligacion_pago);
+clause entrega_condicional = oblig(contrato_base) IMPLIES oblig(obligacion_entrega);
+
+// Foundation joins (establish commercial relationship)
+asset acuerdo_comercial = sell(contrato_base, obligacion_pago);
+
+// Module 1 validation (ensures foundation is sound)
+asset formacion_valida = global();
+
+// ==========================================
+// MODULE 2: PERFORMANCE OBLIGATIONS
+// (Depends on Module 1)
+// ==========================================
+
+// Extended performance types
+service mantenimiento = "mantenimiento preventivo semestral", positive;
+service garantia = "garantía uso pacífico 20 anos", positive;
+service seguro = "seguro integral contra danos", positive;
+
+// Performance actions
+action conservar_sistema = "conservar el sistema solar en el mismo estado durante el arrendamiento proporcionando mantenimiento preventivo semestral y correctivo", mantenimiento;
+action garantizar_uso_pacifico = "garantizar el uso pacífico y eficiente del sistema solar durante los 20 anos de vigencia del contrato", garantia;
+action mantener_seguro_integral = "mantener seguro contra danos robo y responsabilidad civil del sistema solar", seguro;
+action notificar_reparaciones = "notificar al arrendador cualquier mal funcionamiento o necesidad de reparación del sistema a la brevedad posible", mantenimiento;
+
+// Performance assets (build on foundation)
+asset mantenimiento_sistema = arrendador, conservar_sistema, arrendatario;
+asset garantia_uso = arrendador, garantizar_uso_pacifico, arrendatario;
+asset seguro_sistema = arrendador, mantener_seguro_integral, arrendatario;
+asset notificacion_arrendatario = arrendatario, notificar_reparaciones, arrendador;
+
+// Performance dependencies (exploit foundation)
+clause mantenimiento_obligatorio = oblig(contrato_base) IMPLIES oblig(mantenimiento_sistema);
+clause garantia_obligatoria = oblig(contrato_base) IMPLIES oblig(garantia_uso);
+clause seguro_obligatorio = oblig(contrato_base) IMPLIES oblig(seguro_sistema);
+clause notificacion_obligatoria = oblig(mantenimiento_sistema) IMPLIES oblig(notificacion_arrendatario);
+
+// Performance joins (compensatory relationships)
+asset servicio_integral = compensation(mantenimiento_sistema, obligacion_pago);
+// Fixed: Create reciprocal assets for compensation
+asset garantia_reciproca = arrendatario, garantizar_uso_pacifico, arrendador;
+asset proteccion_sistema = compensation(seguro_sistema, garantia_reciproca);
+
+// Module 2 validation (performance layer)
+asset cumplimiento_obligaciones = global();
+
+// ==========================================
+// MODULE 3: ENERGY BUSINESS
+// (Depends on Modules 1+2, adds revenue stream)
+// ==========================================
+
+// Energy business types
+object energia_excedente = "energía excedente generada", movable;
+service venta_energia = "venta a CFE", positive;
+service reparto_ingresos = "reparto 30% ingresos", positive;
+
+subject cfe_distribucion = "CFE Distribución";
+
+// Energy business actions
+action vender_excedentes = "vender energía excedente generada por el sistema a Suministradores de Servicios Básicos", venta_energia;
+action compartir_30_porciento = "compartir 30% de los ingresos por venta de energía excedente con el arrendatario", reparto_ingresos;
+
+// Energy assets
+asset venta_energia_cfe = arrendador, vender_excedentes, cfe_distribucion;
+asset reparto_beneficios = arrendador, compartir_30_porciento, arrendatario;
+
+// Energy dependencies (conditional on energy availability)
+clause venta_condicional = oblig(energia_excedente_disponible) IMPLIES claim(venta_energia_cfe);
+clause reparto_obligatorio = oblig(venta_energia_cfe) IMPLIES oblig(reparto_beneficios);
+
+// Energy business model (separate transactions)
+// The energy sale and profit sharing are separate transactions
+// No join operation needed between them
+
+// Module 3 validation
+asset modelo_energetico = global();
+
+// ==========================================
+// MODULE 4: BREACH SCENARIOS CLUSTER
+// (Comprehensive breach analysis)
+// ==========================================
+
+// Breach types (semantic grouping)
+service rescision_arrendador = "rescisión por arrendador", negative;
+service rescision_arrendatario = "rescisión por arrendatario", negative;
+
+// Landlord breach scenarios (grouped by subject)
+action exigir_rescision_falta_pago = "exigir rescisión del contrato por falta de pago de renta por más de tres meses consecutivos", rescision_arrendador;
+action exigir_rescision_uso_indebido = "exigir rescisión por usar el sistema solar para fines distintos a generación para autoconsumo y venta autorizada de excedentes", rescision_arrendador;
+action exigir_rescision_danos_graves = "exigir rescisión por danos graves al sistema solar imputables al arrendatario sus familiares o terceros autorizados", rescision_arrendador;
+action exigir_rescision_modificaciones = "exigir rescisión por modificar configuración conexiones o componentes del sistema sin consentimiento expreso por escrito", rescision_arrendador;
+
+// Tenant breach scenarios (grouped by subject)
+action exigir_rescision_mantenimiento = "exigir rescisión por incumplimiento persistente de obligaciones de mantenimiento y conservación del sistema", rescision_arrendatario;
+action exigir_rescision_perdida_capacidad = "exigir rescisión por pérdida total o reducción superior al 50% en capacidad de generación por causas no imputables", rescision_arrendatario;
+action exigir_rescision_defectos_ocultos = "exigir rescisión por defectos de fabricación o instalación no detectables en entrega que impidan funcionamiento normal", rescision_arrendatario;
+
+// Breach assets (exploit dependency patterns)
+asset rescision_falta_pago = arrendador, exigir_rescision_falta_pago, arrendatario;
+asset rescision_uso_inadecuado = arrendador, exigir_rescision_uso_indebido, arrendatario;
+asset rescision_danos_sistema = arrendador, exigir_rescision_danos_graves, arrendatario;
+asset rescision_modificacion_ilegal = arrendador, exigir_rescision_modificaciones, arrendatario;
+
+asset rescision_mal_mantenimiento = arrendatario, exigir_rescision_mantenimiento, arrendador;
+asset rescision_perdida_sistema = arrendatario, exigir_rescision_perdida_capacidad, arrendador;
+asset rescision_defectos_graves = arrendatario, exigir_rescision_defectos_ocultos, arrendador;
+
+// Breach logic (exploit pattern: breach → rescission right)
+clause rescision_por_falta_pago = oblig(incumplimiento_3_meses_consecutivos) IMPLIES claim(rescision_falta_pago);
+clause rescision_por_uso_indebido = oblig(uso_fuera_autoconsumo) IMPLIES claim(rescision_uso_inadecuado);
+clause rescision_por_danos = oblig(danos_graves_imputables) IMPLIES claim(rescision_danos_sistema);
+clause rescision_por_modificacion = oblig(modificacion_sin_consentimiento) IMPLIES claim(rescision_modificacion_ilegal);
+
+clause rescision_por_mantenimiento_deficiente = oblig(incumplimiento_mantenimiento_persistente) IMPLIES claim(rescision_mal_mantenimiento);
+clause rescision_por_perdida_funcionalidad = oblig(perdida_capacidad_superior_50) IMPLIES claim(rescision_perdida_sistema);
+clause rescision_por_defectos_fabricacion = oblig(defectos_impiden_funcionamiento) IMPLIES claim(rescision_defectos_graves);
+
+// Breach joins (legal protection patterns)
+// Fixed: Split into pairs of 2 arguments each
+asset proteccion_arrendador_1 = join(rescision_falta_pago, rescision_uso_inadecuado);
+asset proteccion_arrendador_2 = join(proteccion_arrendador_1, rescision_danos_sistema);
+asset proteccion_arrendatario_1 = join(rescision_mal_mantenimiento, rescision_perdida_sistema);
+asset proteccion_arrendatario_2 = join(proteccion_arrendatario_1, rescision_defectos_graves);
+
+// Module 4 validation (breach analysis)
+asset analisis_incumplimientos = litis(
+    rescision_falta_pago, rescision_uso_inadecuado, rescision_danos_sistema,
+    rescision_mal_mantenimiento, rescision_perdida_sistema, rescision_defectos_graves
+);
+
+// ==========================================
+// MODULE 5: TERMINATION & SPECIAL CONDITIONS
+// (Comprehensive termination scenarios)
+// ==========================================
+
+// Termination types
+service terminacion_natural = "terminación por plazo", positive;
+service terminacion_consensual = "terminación por acuerdo", positive;
+service terminacion_extraordinaria = "terminación por fuerza mayor", positive;
+
+// Termination actions (exploit pattern: condition → termination)
+action terminar_automaticamente_2044 = "terminar automáticamente el contrato el día 21 de junio de 2044 al cumplirse el plazo de 20 anos", terminacion_natural;
+action terminar_mutuo_acuerdo = "terminar el contrato por acuerdo mutuo por escrito con 90 días de anticipación", terminacion_consensual;
+action terminar_caso_fortuito = "terminar el contrato automáticamente por destrucción total del sistema por caso fortuito fuerza mayor o desastres naturales", terminacion_extraordinaria;
+
+// Special conditions actions
+action suspender_pago_fuerza_mayor = "suspender el pago de renta mientras dure impedimento total del uso del sistema por caso fortuito o fuerza mayor", terminacion_extraordinaria;
+action solicitar_rescision_impedimento = "solicitar rescisión del contrato si el impedimento total del sistema dura más de dos meses", terminacion_extraordinaria;
+
+// Termination assets
+asset terminacion_plazo_20_anos = arrendador, terminar_automaticamente_2044, arrendatario;
+asset terminacion_consensual_90_dias = arrendador, terminar_mutuo_acuerdo, arrendatario;
+asset terminacion_destruccion_total = arrendador, terminar_caso_fortuito, arrendatario;
+asset suspension_caso_fortuito = arrendatario, suspender_pago_fuerza_mayor, arrendador;
+asset rescision_impedimento_prolongado = arrendatario, solicitar_rescision_impedimento, arrendador;
+
+// Termination logic (exploit conditions)
+clause terminacion_automatica = oblig(cumplimiento_plazo_20_anos) IMPLIES oblig(terminacion_plazo_20_anos);
+clause terminacion_por_acuerdo = oblig(acuerdo_mutuo_90_dias_anticipacion) IMPLIES claim(terminacion_consensual_90_dias);
+clause terminacion_por_destruccion = oblig(destruccion_total_caso_fortuito) IMPLIES oblig(terminacion_destruccion_total);
+clause suspension_por_impedimento = oblig(impedimento_total_caso_fortuito) IMPLIES claim(suspension_caso_fortuito);
+clause rescision_por_impedimento_prolongado = oblig(impedimento_total_mas_2_meses) IMPLIES claim(rescision_impedimento_prolongado);
+
+// Module 5 validation
+asset condiciones_terminacion = global();
+
+// ==========================================
+// MODULE 6: SPECIAL RIGHTS & PROTECTIONS
+// (Option to purchase, improvements, preferences)
+// ==========================================
+
+// Special rights types
+service opcion_compra = "opción de compra", positive;
+service mejoras_protegidas = "protección mejoras", positive;
+service preferencia_venta = "derecho preferencia", positive;
+
+// Special rights actions
+action ejercer_opcion_compra_180k = "ejercer opción de compra del sistema solar por 180000.00 MXN después de 36 meses", opcion_compra;
+action pagar_mejoras_estructurales = "autorizar y obligarse a pagar mejoras estructurales del techo necesarias para soporte del sistema solar", mejoras_protegidas;
+action compensar_mejoras_rescision = "pagar mejoras útiles realizadas para el sistema solar si rescinde el contrato por su culpa no obstante cualquier estipulación contraria", mejoras_protegidas;
+action preferir_compra_terceros = "ser preferido en igualdad de condiciones si el arrendador decide vender el sistema a terceros", preferencia_venta;
+
+// Special rights assets
+asset opcion_compra_36_meses = arrendatario, ejercer_opcion_compra_180k, arrendador;
+asset mejoras_autorizadas = arrendatario, pagar_mejoras_estructurales, arrendador;
+asset proteccion_mejoras = arrendador, compensar_mejoras_rescision, arrendatario;
+asset derecho_preferencia = arrendatario, preferir_compra_terceros, arrendador;
+
+// Special rights logic
+clause opcion_condicional = oblig(cumplimiento_36_meses_renta) IMPLIES claim(opcion_compra_36_meses);
+clause mejoras_obligatorias = oblig(mejoras_estructura_techo) IMPLIES oblig(mejoras_autorizadas);
+clause compensacion_mejoras = oblig(rescision_culpa_arrendador) IMPLIES oblig(proteccion_mejoras);
+clause preferencia_compra = oblig(oferta_venta_terceros) IMPLIES claim(derecho_preferencia);
+
+// Module 6 validation
+asset derechos_especiales = global();
+
+// ==========================================
+// CROSS-MODULE PATTERN EXTRACTION
+// (Witness advanced features)
+// ==========================================
+
+// Extract universal legal patterns across modules
+asset patron_reciprocidad_universal = meet(acuerdo_comercial, servicio_integral);
+asset patron_proteccion_bilateral = meet(proteccion_arrendador_2, proteccion_arrendatario_2);
+asset patron_terminacion_multiple = meet(terminacion_plazo_20_anos, terminacion_consensual_90_dias);
+
+// Evidence chains for legal argumentation
+asset evidencia_incumplimiento_pago = evidence(rescision_falta_pago, notificacion_formal_3_meses);
+asset evidencia_caso_fortuito = evidence(suspension_caso_fortuito, documentacion_autoridad);
+asset evidencia_defectos_sistema = evidence(rescision_defectos_graves, peritaje_tecnico_independiente);
+
+// Legal arguments for dispute resolution
+asset argumento_rescision_justificada = argument(evidencia_incumplimiento_pago, patron_proteccion_bilateral);
+asset argumento_suspension_legitima = argument(evidencia_caso_fortuito, patron_terminacion_multiple);
+
+// Domain analysis for completeness verification
+asset dominio_obligaciones = domain(
+    contrato_base, obligacion_pago, obligacion_entrega,
+    mantenimiento_sistema, garantia_uso, seguro_sistema
+);
+
+asset dominio_derechos = domain(
+    opcion_compra_36_meses, derecho_preferencia,
+    rescision_falta_pago, rescision_mal_mantenimiento
+);
+
+// ==========================================
+// FINAL COMPREHENSIVE VALIDATION
+// ==========================================
+
+// Validate entire modular system
+asset contrato_solar_modular_completo = global();

@@ -1,0 +1,19 @@
+// Test file for litis() system operation
+// This tests selective satisfiability checking
+
+// Define assets
+asset bike_sale = alice, sell_bike, bob;
+asset payment1 = bob, pay, alice;
+asset payment2 = bob, pay, carol;
+
+// Define clauses
+clause clause1 = oblig(bike_sale);
+clause clause2 = oblig(payment1);
+clause clause3 = not(oblig(bike_sale)); // This conflicts with clause1
+
+// Test litis() on conflicting assets
+asset test_litis_conflict = litis(bike_sale, payment1);
+
+// Test litis() on non-conflicting assets  
+clause clause4 = oblig(payment2);
+asset test_litis_no_conflict = litis(payment1, payment2); 

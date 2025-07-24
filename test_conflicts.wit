@@ -1,0 +1,24 @@
+// Test conflicting clauses for conflict analysis
+
+// Parties
+subject alice = "Alice";
+subject bob = "Bob";
+
+// Objects and Services
+object bike = "bicycle", movable;
+service payment = "money", positive;
+
+// Actions
+action sell_bike = "sell", bike;
+action pay = "pay", payment;
+
+// Assets
+asset bike_sale = alice, sell_bike, bob;
+asset payment1 = bob, pay, alice;
+
+// Conflicting clauses - these should create a conflict
+clause clause1 = oblig(bike_sale);
+clause clause2 = not(oblig(bike_sale));  // Direct contradiction with clause1
+
+// This should be unsatisfiable due to the conflict
+asset check = global(); 

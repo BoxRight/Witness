@@ -1,0 +1,80 @@
+# Build artifacts
+witnessc
+*.o
+*.obj
+*.exe
+*.out
+*.app
+
+# CUDA build artifacts
+tree_fold_cuda
+*.cubin
+*.ptx
+
+# Generated parser/lexer files
+src/parser.tab.cpp
+src/parser.tab.hpp
+src/lexer.cpp
+src/location.hh
+src/position.hh
+src/stack.hh
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# JSON export files (generated during runtime)
+witness_export_*.json
+
+# CUDA solver output files (generated during runtime)
+zdd_*.bin
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Backup files
+*.bak
+*.backup
+
+# Log files
+*.log
+
+# Dependencies (if using package managers)
+node_modules/
+vendor/
+
+# Test output files
+test_*.wit.output
+*.test.out
+
+# Documentation build artifacts
+docs/_build/
+docs/build/
+
+# Coverage reports
+*.gcov
+*.gcda
+*.gcno
+coverage/
+
+# Profiling data
+*.prof
+gmon.out
+
+# Memory check files
+*.memcheck
+valgrind-out.txt

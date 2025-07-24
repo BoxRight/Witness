@@ -1,4 +1,5 @@
 #include "semantic_analyzer.hpp"
+#include "conflict_analyzer.hpp"
 #include <iostream>
 #include <algorithm>
 #include <cctype>
@@ -10,6 +11,9 @@
 #include <cstdlib>
 
 namespace witness {
+
+// Global counter for unique filenames
+static int global_check_counter = 0;
 
 SemanticAnalyzer::SemanticAnalyzer() {
     // Initialize the set of recognized join operations from JOINS.md
@@ -43,6 +47,13 @@ SemanticAnalyzer::SemanticAnalyzer() {
     
     // Initialize solver mode
     solverMode = "exhaustive";
+    
+    // Initialize verbosity flags
+    verbose = false;
+    quiet = false;
+    
+    // Initialize conflict analyzer
+    conflict_analyzer = std::make_unique<ConflictAnalyzer>();
 }
 
 void SemanticAnalyzer::setSolverMode(const std::string& mode) {
@@ -51,6 +62,22 @@ void SemanticAnalyzer::setSolverMode(const std::string& mode) {
 
 std::string SemanticAnalyzer::getSolverMode() const {
     return solverMode;
+}
+
+void SemanticAnalyzer::setVerbose(bool v) {
+    verbose = v;
+}
+
+void SemanticAnalyzer::setQuiet(bool q) {
+    quiet = q;
+}
+
+bool SemanticAnalyzer::isVerbose() const {
+    return verbose;
+}
+
+bool SemanticAnalyzer::isQuiet() const {
+    return quiet;
 }
 
 int SemanticAnalyzer::getOrAssignAssetID(const std::string& asset_name) {
@@ -94,8 +121,9 @@ SemanticAnalyzer::SatisfiabilityResult SemanticAnalyzer::generateTruthTable() {
     if (solverMode == "external") {
         generateExternalSolverTruthTable();
         
-        // Read results from CUDA solver
-        std::ifstream result_file("zdd.bin", std::ios::binary);
+        // Read results from CUDA solver using the most recent result file
+        std::string result_filename = "zdd_" + std::to_string(global_check_counter) + ".bin";
+        std::ifstream result_file(result_filename, std::ios::binary);
         if (!result_file.is_open()) {
             SatisfiabilityResult result;
             result.satisfiable = false;
@@ -126,7 +154,21 @@ SemanticAnalyzer::SatisfiabilityResult SemanticAnalyzer::generateTruthTable() {
         if (result.satisfiable) {
             result.error_message = "External solver mode: " + std::to_string(result.assignments.size()) + " satisfying assignments found";
         } else {
+            // Create reverse mapping from asset IDs to asset names
+            std::unordered_map<int, std::string> id_to_asset;
+            for (const auto& pair : asset_to_id) {
+                id_to_asset[pair.second] = pair.first;
+            }
+            
+            // Use conflict analyzer to find minimal conflicting set
+            std::vector<std::string> conflicting_clauses = conflict_analyzer->findMinimalConflictingSet(current_clauses, id_to_asset);
+            std::string conflict_report = conflict_analyzer->generateConflictReport(conflicting_clauses, id_to_asset);
+            
             result.error_message = "External solver mode: No satisfying assignments found";
+            result.conflicting_clauses = conflicting_clauses;
+            
+            // Print conflict report
+            std::cout << "\n" << conflict_report << std::endl;
         }
         
         return result;
@@ -214,8 +256,348 @@ SemanticAnalyzer::SatisfiabilityResult SemanticAnalyzer::generateExhaustiveTruth
     if (result.satisfiable) {
         reportWarning("Truth table generation completed: " + std::to_string(result.assignments.size()) + " satisfying assignments found");
     } else {
+        // Create reverse mapping from asset IDs to asset names
+        std::unordered_map<int, std::string> id_to_asset;
+        for (const auto& pair : asset_to_id) {
+            id_to_asset[pair.second] = pair.first;
+        }
+        
+        // Use conflict analyzer to find minimal conflicting set
+        std::vector<std::string> conflicting_clauses = conflict_analyzer->findMinimalConflictingSet(current_clauses, id_to_asset);
+        std::string conflict_report = conflict_analyzer->generateConflictReport(conflicting_clauses, id_to_asset);
+        
         result.error_message = "No satisfying assignments found - clauses are unsatisfiable";
+        result.conflicting_clauses = conflicting_clauses;
+        
         reportError(result.error_message);
+        std::cout << "\n" << conflict_report << std::endl;
+    }
+
+    return result;
+}
+
+SemanticAnalyzer::SatisfiabilityResult SemanticAnalyzer::generateSelectiveTruthTable(const std::vector<std::string>& target_assets) {
+    SatisfiabilityResult result;
+    result.satisfiable = false;
+
+    if (current_clauses.empty()) {
+        result.satisfiable = true;
+        result.assignments.push_back({}); // Empty assignment satisfies no clauses
+        return result;
+    }
+
+    // Get asset IDs for target assets
+    std::set<int> target_asset_ids;
+    for (const auto& asset_name : target_assets) {
+        auto it = asset_to_id.find(asset_name);
+        if (it != asset_to_id.end()) {
+            target_asset_ids.insert(it->second);
+        } else {
+            reportWarning("Asset '" + asset_name + "' not found in current clauses - skipping");
+        }
+    }
+
+    if (target_asset_ids.empty()) {
+        result.satisfiable = true;
+        result.assignments.push_back({}); // No target assets means trivially satisfiable
+        return result;
+    }
+
+    // Filter clauses to only those that involve target assets
+    std::vector<ClauseInfo> relevant_clauses;
+    for (const auto& clause : current_clauses) {
+        std::set<int> clause_assets;
+        collectAssetIDs(clause.expr, clause_assets);
+        
+        // Check if this clause involves any target assets
+        bool is_relevant = false;
+        for (int target_id : target_asset_ids) {
+            if (clause_assets.find(target_id) != clause_assets.end()) {
+                is_relevant = true;
+                break;
+            }
+        }
+        
+        if (is_relevant) {
+            relevant_clauses.push_back(clause);
+        }
+    }
+
+    if (relevant_clauses.empty()) {
+        result.satisfiable = true;
+        result.assignments.push_back({}); // No relevant clauses means trivially satisfiable
+        return result;
+    }
+
+    // Collect all unique asset IDs used in relevant clause expressions
+    std::set<int> all_asset_ids;
+    for (const auto& clause : relevant_clauses) {
+        collectAssetIDs(clause.expr, all_asset_ids);
+    }
+    std::vector<int> asset_ids(all_asset_ids.begin(), all_asset_ids.end());
+    int num_assets = asset_ids.size();
+
+    reportWarning("Selective truth table generation: " + std::to_string(num_assets) + " assets, " +
+                  std::to_string(relevant_clauses.size()) + " relevant clauses, " +
+                  std::to_string(1 << num_assets) + " combinations to check");
+
+    // Generate all possible 2^n truth assignments
+    for (int assignment = 0; assignment < (1 << num_assets); assignment++) {
+        std::vector<int> current_assignment;
+        std::map<int, bool> assignment_map;
+        // Create signed literal assignment
+        for (int i = 0; i < num_assets; i++) {
+            int asset_id = asset_ids[i];
+            bool value = (assignment & (1 << i));
+            assignment_map[asset_id] = value;
+            if (value) {
+                current_assignment.push_back(asset_id);  // Positive literal
+            } else {
+                current_assignment.push_back(-asset_id); // Negative literal
+            }
+        }
+
+        // Check if this assignment satisfies all relevant clauses
+        bool satisfies_all = true;
+        for (const auto& clause : relevant_clauses) {
+            bool clause_satisfied = false;
+            try {
+                clause_satisfied = evalExpr(clause.expr, assignment_map);
+            } catch (const std::exception& e) {
+                reportError(std::string("[generateSelectiveTruthTable] Evaluation error: ") + e.what());
+                clause_satisfied = false;
+            }
+            if (!clause_satisfied) {
+                satisfies_all = false;
+                break;
+            }
+        }
+
+        if (satisfies_all) {
+            result.assignments.push_back(current_assignment);
+        }
+    }
+
+    result.satisfiable = !result.assignments.empty();
+
+    if (result.satisfiable) {
+        reportWarning("Selective truth table generation completed: " + std::to_string(result.assignments.size()) + " satisfying assignments found");
+    } else {
+        // Create reverse mapping from asset IDs to asset names
+        std::unordered_map<int, std::string> id_to_asset;
+        for (const auto& pair : asset_to_id) {
+            id_to_asset[pair.second] = pair.first;
+        }
+        
+        // Use conflict analyzer to find minimal conflicting set
+        std::vector<std::string> conflicting_clauses = conflict_analyzer->findMinimalConflictingSet(relevant_clauses, id_to_asset);
+        std::string conflict_report = conflict_analyzer->generateConflictReport(conflicting_clauses, id_to_asset);
+        
+        result.error_message = "No satisfying assignments found for selected assets - clauses are unsatisfiable";
+        result.conflicting_clauses = conflicting_clauses;
+        
+        reportError(result.error_message);
+        std::cout << "\n" << conflict_report << std::endl;
+    }
+
+    return result;
+}
+
+SemanticAnalyzer::SatisfiabilityResult SemanticAnalyzer::generateSelectiveExternalTruthTable(const std::vector<std::string>& target_assets) {
+    SatisfiabilityResult result;
+    result.satisfiable = false;
+
+    if (current_clauses.empty()) {
+        result.satisfiable = true;
+        result.assignments.push_back({}); // Empty assignment satisfies no clauses
+        return result;
+    }
+
+    // Get asset IDs for target assets
+    std::set<int> target_asset_ids;
+    for (const auto& asset_name : target_assets) {
+        auto it = asset_to_id.find(asset_name);
+        if (it != asset_to_id.end()) {
+            target_asset_ids.insert(it->second);
+        } else {
+            reportWarning("Asset '" + asset_name + "' not found in current clauses - skipping");
+        }
+    }
+
+    if (target_asset_ids.empty()) {
+        result.satisfiable = true;
+        result.assignments.push_back({}); // No target assets means trivially satisfiable
+        return result;
+    }
+
+    // Filter clauses to only those that involve target assets
+    std::vector<ClauseInfo> relevant_clauses;
+    for (const auto& clause : current_clauses) {
+        std::set<int> clause_assets;
+        collectAssetIDs(clause.expr, clause_assets);
+        
+        // Check if this clause involves any target assets
+        bool is_relevant = false;
+        for (int target_id : target_asset_ids) {
+            if (clause_assets.find(target_id) != clause_assets.end()) {
+                is_relevant = true;
+                break;
+            }
+        }
+        
+        if (is_relevant) {
+            relevant_clauses.push_back(clause);
+        }
+    }
+
+    if (relevant_clauses.empty()) {
+        result.satisfiable = true;
+        result.assignments.push_back({}); // No relevant clauses means trivially satisfiable
+        return result;
+    }
+
+    // Store original clauses and replace with relevant ones
+    std::vector<ClauseInfo> original_clauses = current_clauses;
+    current_clauses = relevant_clauses;
+
+    // Generate unique filenames for this litis check
+    global_check_counter++;
+    std::string json_filename = "witness_export_" + std::to_string(global_check_counter) + ".json";
+    std::string result_filename = "zdd_" + std::to_string(global_check_counter) + ".bin";
+
+    // Export relevant clauses to JSON for CUDA solver
+    std::ofstream json_file(json_filename);
+    if (!json_file.is_open()) {
+        reportError("Could not open JSON file for writing: " + json_filename);
+        current_clauses = original_clauses; // Restore original clauses
+        return result;
+    }
+
+    json_file << "{\n";
+    json_file << "  \"clauses\": [\n";
+    
+    for (size_t i = 0; i < relevant_clauses.size(); ++i) {
+        const auto& clause = relevant_clauses[i];
+        json_file << "    {\n";
+        json_file << "      \"name\": \"" << clause.name << "\",\n";
+        json_file << "      \"expression\": \"" << clause.expression << "\",\n";
+        json_file << "      \"assignments\": [\n";
+        
+        // Generate satisfying assignments for this clause
+        std::set<int> clause_assets;
+        collectAssetIDs(clause.expr, clause_assets);
+        std::vector<int> asset_list(clause_assets.begin(), clause_assets.end());
+        
+        // Generate all possible assignments for this clause
+        std::vector<std::vector<int>> satisfying_assignments;
+        for (int assignment = 0; assignment < (1 << asset_list.size()); ++assignment) {
+            std::map<int, bool> assignment_map;
+            std::vector<int> current_assignment;
+            
+            for (size_t j = 0; j < asset_list.size(); ++j) {
+                int asset_id = asset_list[j];
+                bool value = (assignment & (1 << j));
+                assignment_map[asset_id] = value;
+                if (value) {
+                    current_assignment.push_back(asset_id);
+                } else {
+                    current_assignment.push_back(-asset_id);
+                }
+            }
+            
+            // Check if this assignment satisfies the clause
+            bool clause_satisfied = false;
+            try {
+                clause_satisfied = evalExpr(clause.expr, assignment_map);
+            } catch (const std::exception& e) {
+                clause_satisfied = false;
+            }
+            
+            if (clause_satisfied) {
+                satisfying_assignments.push_back(current_assignment);
+            }
+        }
+        
+        // Write satisfying assignments to JSON
+        for (size_t assign_idx = 0; assign_idx < satisfying_assignments.size(); ++assign_idx) {
+            const auto& current_assignment = satisfying_assignments[assign_idx];
+            json_file << "        [";
+            for (size_t k = 0; k < current_assignment.size(); ++k) {
+                json_file << current_assignment[k];
+                if (k < current_assignment.size() - 1) json_file << ", ";
+            }
+            json_file << "]";
+            if (assign_idx < satisfying_assignments.size() - 1) json_file << ",";
+            json_file << "\n";
+        }
+        
+        json_file << "      ]\n";
+        json_file << "    }";
+        if (i < relevant_clauses.size() - 1) json_file << ",";
+        json_file << "\n";
+    }
+    
+    json_file << "  ]\n";
+    json_file << "}\n";
+    json_file.close();
+
+    // Call CUDA solver
+    std::string cuda_command = "./tree_fold_cuda " + json_filename + " " + result_filename;
+    int exit_code = system(cuda_command.c_str());
+    
+    if (exit_code != 0) {
+        reportError("CUDA solver failed with exit code: " + std::to_string(exit_code));
+        current_clauses = original_clauses; // Restore original clauses
+        return result;
+    }
+
+    // Read results from CUDA solver
+    std::ifstream result_file(result_filename, std::ios::binary);
+    if (!result_file.is_open()) {
+        reportError("Could not open result file: " + result_filename);
+        current_clauses = original_clauses; // Restore original clauses
+        return result;
+    }
+
+    // Read combinations from binary file
+    while (result_file.good()) {
+        int size;
+        result_file.read(reinterpret_cast<char*>(&size), sizeof(int));
+        if (result_file.eof()) break;
+        
+        if (size > 0 && size <= 1000) { // Sanity check
+            std::vector<int> combination(size);
+            result_file.read(reinterpret_cast<char*>(combination.data()), size * sizeof(int));
+            if (result_file.good()) {
+                result.assignments.push_back(combination);
+            }
+        }
+    }
+    result_file.close();
+
+    // Restore original clauses
+    current_clauses = original_clauses;
+
+    result.satisfiable = !result.assignments.empty();
+    
+    if (result.satisfiable) {
+        result.error_message = "External solver mode: " + std::to_string(result.assignments.size()) + " satisfying assignments found for selected assets";
+    } else {
+        // Create reverse mapping from asset IDs to asset names
+        std::unordered_map<int, std::string> id_to_asset;
+        for (const auto& pair : asset_to_id) {
+            id_to_asset[pair.second] = pair.first;
+        }
+        
+        // Use conflict analyzer to find minimal conflicting set
+        std::vector<std::string> conflicting_clauses = conflict_analyzer->findMinimalConflictingSet(relevant_clauses, id_to_asset);
+        std::string conflict_report = conflict_analyzer->generateConflictReport(conflicting_clauses, id_to_asset);
+        
+        result.error_message = "External solver mode: No satisfying assignments found for selected assets";
+        result.conflicting_clauses = conflicting_clauses;
+        
+        reportError(result.error_message);
+        std::cout << "\n" << conflict_report << std::endl;
     }
 
     return result;
@@ -403,14 +785,14 @@ void SemanticAnalyzer::analyze(Program* program) {
     }
     
     // Report analysis results
-    if (!errors.empty()) {
+    if (!errors.empty() && !quiet) {
         std::cout << "Semantic Analysis Errors:" << std::endl;
         for (const auto& error : errors) {
             std::cout << "  Error: " << error << std::endl;
         }
     }
     
-    if (!warnings.empty()) {
+    if (!warnings.empty() && !quiet) {
         std::cout << "Semantic Analysis Warnings:" << std::endl;
         for (const auto& warning : warnings) {
             std::cout << "  Warning: " << warning << std::endl;
@@ -418,13 +800,15 @@ void SemanticAnalyzer::analyze(Program* program) {
     }
     
     // Report completion status
-    if (errors.empty()) {
-        std::cout << "Semantic analysis completed successfully!" << std::endl;
-        std::cout << "- System operations validated: global(), domain(), litis(), meet()" << std::endl;
-        std::cout << "- Join operations validated: transfer, sell, compensation, consideration, forbearance, encumber" << std::endl;
-        std::cout << "- Logical operations validated: oblig(), claim(), not()" << std::endl;
-    } else {
-        std::cout << "Semantic analysis completed with " << errors.size() << " error(s)" << std::endl;
+    if (!quiet) {
+        if (errors.empty()) {
+            std::cout << "Semantic analysis completed successfully!" << std::endl;
+            std::cout << "- System operations validated: global(), domain(), litis(), meet()" << std::endl;
+            std::cout << "- Join operations validated: transfer, sell, compensation, consideration, forbearance, encumber" << std::endl;
+            std::cout << "- Logical operations validated: oblig(), claim(), not()" << std::endl;
+        } else {
+            std::cout << "Semantic analysis completed with " << errors.size() << " error(s)" << std::endl;
+        }
     }
 }
 
@@ -769,10 +1153,14 @@ bool SemanticAnalyzer::validateSystemOperation(const std::string& operation_type
 
 void SemanticAnalyzer::reportError(const std::string& message) {
     errors.push_back(message);
+    // Always print errors, even in quiet mode
+    std::cerr << "Error: " << message << std::endl;
 }
 
 void SemanticAnalyzer::reportWarning(const std::string& message) {
     warnings.push_back(message);
+    // Don't print warnings immediately in quiet mode, but still collect them
+    // They will be shown in the summary if quiet mode is disabled
 }
 
 // Private implementation methods
@@ -1486,16 +1874,72 @@ bool SemanticAnalyzer::validateLitisOperation(FunctionCallExpression* func_call)
         return false;
     }
     
-    // All arguments should be valid asset identifiers
+    // Extract asset names from arguments
+    std::vector<std::string> target_assets;
     for (const auto& arg : func_call->arguments->expressions) {
         if (!arg) {
             reportError("litis() operation requires valid asset arguments");
             return false;
         }
+        
+        // Extract asset name from identifier
+        if (auto identifier = dynamic_cast<Identifier*>(arg.get())) {
+            target_assets.push_back(identifier->name);
+        } else {
+            reportError("litis() operation requires asset identifier arguments");
+            return false;
+        }
     }
     
-    // For now, all litis() operations are valid
-    // TODO: Implement selective satisfiability checking for specified assets
+    // Trigger selective satisfiability checking for specified assets
+    reportWarning("litis() operation triggered - selective satisfiability checking for assets: " + 
+                  [&target_assets]() {
+                      std::string result;
+                      for (size_t i = 0; i < target_assets.size(); ++i) {
+                          if (i > 0) result += ", ";
+                          result += target_assets[i];
+                      }
+                      return result;
+                  }());
+    
+    // Perform selective satisfiability checking based on solver mode
+    SatisfiabilityResult result;
+    if (solverMode == "external") {
+        result = generateSelectiveExternalTruthTable(target_assets);
+    } else {
+        result = generateSelectiveTruthTable(target_assets);
+    }
+    
+    if (result.satisfiable) {
+        reportWarning("litis() operation successful - selected assets are satisfiable together");
+        
+        // Report satisfying assignments
+        for (size_t i = 0; i < result.assignments.size(); i++) {
+            std::string assignment_str = "Assignment " + std::to_string(i + 1) + ": [";
+            for (size_t j = 0; j < result.assignments[i].size(); j++) {
+                int lit = result.assignments[i][j];
+                if (lit > 0) {
+                    assignment_str += "+" + std::to_string(lit);
+                } else {
+                    assignment_str += std::to_string(lit);
+                }
+                if (j < result.assignments[i].size() - 1) {
+                    assignment_str += ", ";
+                }
+            }
+            assignment_str += "]";
+            reportWarning(assignment_str);
+        }
+        std::cout << "Litis check SATISFIABLE" << std::endl;
+    } else {
+        reportError("litis() operation failed - selected assets are unsatisfiable: " + result.error_message);
+        std::cout << "Litis check UNSATISFIABLE: " << result.error_message << std::endl;
+        return false;
+    }
+    
+    // Reset clause set for next operation
+    current_clauses.clear();
+    reportWarning("Clause set reset after litis() operation.");
     return true;
 }
 
@@ -1667,7 +2111,9 @@ void SemanticAnalyzer::createImplicitActionDefinition(const std::string& action_
     symbol_table[action_string] = TypeInfo("action", "", action_components);
 }
 
-void SemanticAnalyzer::printClauseTruthTable(const ClauseInfo& clause) {
+void SemanticAnalyzer::printClauseTruthTable(const witness::ClauseInfo& clause) {
+    if (!verbose) return; // Only print if verbose mode is enabled
+    
     if (!clause.expr) {
         std::cerr << "[printClauseTruthTable] Error: No expression pointer for clause '" << clause.name << "'.\n";
         return;
@@ -1815,7 +2261,9 @@ void SemanticAnalyzer::generateExternalSolverTruthTable() {
     std::vector<int> asset_list(all_asset_ids.begin(), all_asset_ids.end());
     int assets_per_assignment = asset_list.size();
 
-    std::cout << "\n=== EXTERNAL SOLVER DEBUG: Clause Sets ===" << std::endl;
+    if (verbose) {
+        std::cout << "\n=== EXTERNAL SOLVER DEBUG: Clause Sets ===" << std::endl;
+    }
     std::vector<std::set<std::vector<int>>> clause_satisfying_assignments;
     
     for (size_t clause_idx = 0; clause_idx < current_clauses.size(); clause_idx++) {
@@ -1844,39 +2292,45 @@ void SemanticAnalyzer::generateExternalSolverTruthTable() {
             }
         }
         
-        std::cout << "\nClause " << (clause_idx + 1) << ": '" << clause.name << "'" << std::endl;
-        std::cout << "  Expression: " << clause.expression << std::endl;
-        std::cout << "  Asset IDs: [";
-        for (auto it = clause_asset_ids.begin(); it != clause_asset_ids.end(); ++it) {
-            if (it != clause_asset_ids.begin()) std::cout << ", ";
-            std::cout << *it;
-        }
-        std::cout << "]" << std::endl;
-        std::cout << "  Satisfying assignments:" << std::endl;
-        for (const auto& assignment : clause_assignments) {
-            std::cout << "    [";
-            for (size_t i = 0; i < assignment.size(); i++) {
-                if (i > 0) std::cout << ", ";
-                std::cout << assignment[i];
+        if (verbose) {
+            std::cout << "\nClause " << (clause_idx + 1) << ": '" << clause.name << "'" << std::endl;
+            std::cout << "  Expression: " << clause.expression << std::endl;
+            std::cout << "  Asset IDs: [";
+            for (auto it = clause_asset_ids.begin(); it != clause_asset_ids.end(); ++it) {
+                if (it != clause_asset_ids.begin()) std::cout << ", ";
+                std::cout << *it;
             }
             std::cout << "]" << std::endl;
+            std::cout << "  Satisfying assignments:" << std::endl;
+            for (const auto& assignment : clause_assignments) {
+                std::cout << "    [";
+                for (size_t i = 0; i < assignment.size(); i++) {
+                    if (i > 0) std::cout << ", ";
+                    std::cout << assignment[i];
+                }
+                std::cout << "]" << std::endl;
+            }
+            std::cout << "  Total satisfying assignments: " << clause_assignments.size() << std::endl;
         }
-        std::cout << "  Total satisfying assignments: " << clause_assignments.size() << std::endl;
         clause_satisfying_assignments.push_back(clause_assignments);
     }
     
-    std::cout << "\n=== SOLVER INTERFACE INPUT ===" << std::endl;
-    std::cout << "Number of clauses: " << clause_satisfying_assignments.size() << std::endl;
-    for (size_t i = 0; i < clause_satisfying_assignments.size(); i++) {
-        std::cout << "Clause " << (i + 1) << " set size: " << clause_satisfying_assignments[i].size() << std::endl;
+    if (verbose) {
+        std::cout << "\n=== SOLVER INTERFACE INPUT ===" << std::endl;
+        std::cout << "Number of clauses: " << clause_satisfying_assignments.size() << std::endl;
+        for (size_t i = 0; i < clause_satisfying_assignments.size(); i++) {
+            std::cout << "Clause " << (i + 1) << " set size: " << clause_satisfying_assignments[i].size() << std::endl;
+        }
+        std::cout << "===============================" << std::endl;
     }
-    std::cout << "===============================" << std::endl;
     
     // Export data for CUDA solver (CudaSet format)
     exportForCudaSolver(clause_satisfying_assignments, all_asset_ids);
 
     // --- JSON Export and CUDA Solver Execution ---
-    std::cout << "\n=== JSON EXPORT FOR CUDA ===" << std::endl;
+    if (verbose) {
+        std::cout << "\n=== JSON EXPORT FOR CUDA ===" << std::endl;
+    }
     std::ostringstream json;
     json << "{\n  \"assets\": [";
     for (size_t i = 0; i < asset_list.size(); ++i) {
@@ -1915,22 +2369,32 @@ void SemanticAnalyzer::generateExternalSolverTruthTable() {
     }
     json << "  ]\n}";
     
+    // Generate unique filenames for this global check
+    global_check_counter++;
+    std::string json_filename = "witness_export_" + std::to_string(global_check_counter) + ".json";
+    std::string result_filename = "zdd_" + std::to_string(global_check_counter) + ".bin";
+    
     // Write JSON to file
-    std::string json_filename = "witness_export.json";
     std::ofstream json_file(json_filename);
     if (json_file.is_open()) {
         json_file << json.str();
         json_file.close();
-        std::cout << "JSON exported to " << json_filename << std::endl;
+        if (verbose) {
+            std::cout << "JSON exported to " << json_filename << std::endl;
+        }
     } else {
         std::cerr << "Error: Could not write JSON to " << json_filename << std::endl;
         return;
     }
     
-    // Call CUDA solver
-    std::cout << "\n=== CALLING CUDA SOLVER ===" << std::endl;
-    std::string cuda_command = "./tree_fold_cuda " + json_filename;
-    std::cout << "Executing: " << cuda_command << std::endl;
+    // Call CUDA solver with output filename
+    if (verbose) {
+        std::cout << "\n=== CALLING CUDA SOLVER ===" << std::endl;
+    }
+    std::string cuda_command = "./tree_fold_cuda " + json_filename + " " + result_filename;
+    if (verbose) {
+        std::cout << "Executing: " << cuda_command << std::endl;
+    }
     
     int result = system(cuda_command.c_str());
     if (result != 0) {
@@ -1939,10 +2403,12 @@ void SemanticAnalyzer::generateExternalSolverTruthTable() {
     }
     
     // Read results from CUDA solver
-    std::cout << "\n=== READING CUDA SOLVER RESULTS ===" << std::endl;
-    std::ifstream result_file("zdd.bin", std::ios::binary);
+    if (verbose) {
+        std::cout << "\n=== READING CUDA SOLVER RESULTS ===" << std::endl;
+    }
+    std::ifstream result_file(result_filename, std::ios::binary);
     if (!result_file.is_open()) {
-        std::cerr << "Error: Could not open result file zdd.bin" << std::endl;
+        std::cerr << "Error: Could not open result file " << result_filename << std::endl;
         return;
     }
     
@@ -1962,24 +2428,26 @@ void SemanticAnalyzer::generateExternalSolverTruthTable() {
     }
     result_file.close();
     
-    std::cout << "CUDA solver found " << final_combinations.size() << " satisfying combinations" << std::endl;
-    
-    // Display first few results
-    std::cout << "\n=== FIRST 10 SATISFYING COMBINATIONS ===" << std::endl;
-    for (size_t i = 0; i < std::min(final_combinations.size(), size_t(10)); ++i) {
-        std::cout << "Combination " << (i + 1) << ": [";
-        for (size_t j = 0; j < final_combinations[i].size(); ++j) {
-            if (j > 0) std::cout << ", ";
-            std::cout << final_combinations[i][j];
+    if (verbose) {
+        std::cout << "CUDA solver found " << final_combinations.size() << " satisfying combinations" << std::endl;
+        
+        // Display first few results
+        std::cout << "\n=== FIRST 10 SATISFYING COMBINATIONS ===" << std::endl;
+        for (size_t i = 0; i < std::min(final_combinations.size(), size_t(10)); ++i) {
+            std::cout << "Combination " << (i + 1) << ": [";
+            for (size_t j = 0; j < final_combinations[i].size(); ++j) {
+                if (j > 0) std::cout << ", ";
+                std::cout << final_combinations[i][j];
+            }
+            std::cout << "]" << std::endl;
         }
-        std::cout << "]" << std::endl;
+        
+        if (final_combinations.size() > 10) {
+            std::cout << "... and " << (final_combinations.size() - 10) << " more combinations" << std::endl;
+        }
+        
+        std::cout << "=== END CUDA SOLVER RESULTS ===" << std::endl;
     }
-    
-    if (final_combinations.size() > 10) {
-        std::cout << "... and " << (final_combinations.size() - 10) << " more combinations" << std::endl;
-    }
-    
-    std::cout << "=== END CUDA SOLVER RESULTS ===" << std::endl;
 }
 
-} // namespace witness
+} // namespace witness 

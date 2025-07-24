@@ -2,6 +2,8 @@
 #define SEMANTIC_ANALYZER_HPP
 
 #include "ast.hpp"
+#include "clause_info.hpp"
+#include "conflict_analyzer.hpp"
 #include <string>
 #include <vector>
 #include <memory>
@@ -10,6 +12,7 @@
 #include <utility>
 #include <set>
 #include <map>
+
 
 namespace witness {
 
@@ -37,13 +40,6 @@ public:
     SemanticAnalyzer();
     
     // Data structures for satisfiability checking
-    struct ClauseInfo {
-        std::string name;                        // Clause name
-        std::vector<int> positive_literals;      // Asset IDs that must be true
-        std::vector<int> negative_literals;      // Asset IDs that must be false
-        std::string expression;                  // Original expression string
-        Expression* expr = nullptr;              // Pointer to the actual clause expression
-    };
     
     struct SatisfiabilityResult {
         bool satisfiable;
@@ -58,6 +54,12 @@ public:
     // Solver mode management
     void setSolverMode(const std::string& mode);
     std::string getSolverMode() const;
+
+    // Verbosity control
+    void setVerbose(bool verbose);
+    void setQuiet(bool quiet);
+    bool isVerbose() const;
+    bool isQuiet() const;
     
     // Check if a function name is a join operation
     bool isJoinOperation(const std::string& function_name) const;
@@ -86,6 +88,8 @@ public:
     // Truth table generation for satisfiability checking
     SatisfiabilityResult generateTruthTable();
     SatisfiabilityResult generateExhaustiveTruthTable();
+    SatisfiabilityResult generateSelectiveTruthTable(const std::vector<std::string>& target_assets);
+    SatisfiabilityResult generateSelectiveExternalTruthTable(const std::vector<std::string>& target_assets);
     void exportForCudaSolver(const std::vector<std::set<std::vector<int>>>& clause_satisfying_assignments, 
                              const std::set<int>& all_asset_ids);
     void generateExternalSolverTruthTable();
@@ -116,7 +120,7 @@ public:
     void reportWarning(const std::string& message);
     
     // Generate and print the per-clause truth table
-    void printClauseTruthTable(const ClauseInfo& clause);
+    void printClauseTruthTable(const witness::ClauseInfo& clause);
     
 private:
     // Set of recognized join operations
@@ -138,12 +142,19 @@ private:
     // Solver mode: "exhaustive" or "external"
     std::string solverMode;
     
+    // Verbosity flags
+    bool verbose;
+    bool quiet;
+    
     // Asset ID tracking for satisfiability checking
     std::unordered_map<std::string, int> asset_to_id;
     int next_asset_id;
     
     // Current clauses for satisfiability checking
     std::vector<ClauseInfo> current_clauses;
+    
+    // Conflict analysis for unsatisfiable clauses
+    std::unique_ptr<ConflictAnalyzer> conflict_analyzer;
     
     // Symbol table management
     void registerTypeDefinition(TypeDefinition* type_def);

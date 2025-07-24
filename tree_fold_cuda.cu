@@ -1015,7 +1015,7 @@ std::vector<std::vector<int>> gpuPostProcess(const CudaSet& resultSet, bool verb
 }
 
 // Run test cases with Witness JSON
-void runWitnessTestCases(const std::string& filename) {
+void runWitnessTestCases(const std::string& filename, const std::string& output_filename) {
     std::vector<std::vector<std::vector<int>>> testSets = 
         generateWitnessSetsFromJSON(filename);
     
@@ -1085,9 +1085,9 @@ void runWitnessTestCases(const std::string& filename) {
     printf("Final processed result contains %zu combinations\n", finalVectors.size());
     
     // Open file for writing
-    FILE* outFile = fopen("zdd.bin", "wb");
+    FILE* outFile = fopen(output_filename.c_str(), "wb");
     if (!outFile) {
-        fprintf(stderr, "Error: Could not open zdd.bin for writing\n");
+        fprintf(stderr, "Error: Could not open %s for writing\n", output_filename.c_str());
     } else {
         for (const auto& vec : finalVectors) {
             int size = vec.size();
@@ -1095,7 +1095,7 @@ void runWitnessTestCases(const std::string& filename) {
             fwrite(vec.data(), sizeof(int), size, outFile);
         }
         fclose(outFile);
-        printf("Results written to zdd.bin\n");
+        printf("Results written to %s\n", output_filename.c_str());
     }
     
     // Clean up original sets
@@ -1112,13 +1112,15 @@ void runWitnessTestCases(const std::string& filename) {
 
 int main(int argc, char* argv[]) {
     // Check command line arguments
-    if (argc != 2) {
-        printf("Usage: %s <witness_json_file>\n", argv[0]);
+    if (argc != 2 && argc != 3) {
+        printf("Usage: %s <witness_json_file> [output_file]\n", argv[0]);
         printf("Example: %s witness_export.json\n", argv[0]);
+        printf("Example: %s witness_export.json zdd_custom.bin\n", argv[0]);
         return EXIT_FAILURE;
     }
     
     std::string filename = argv[1];
+    std::string output_filename = (argc == 3) ? argv[2] : "zdd.bin";
     
     // Initialize CUDA
     int deviceCount;
@@ -1130,9 +1132,10 @@ int main(int argc, char* argv[]) {
     CHECK_CUDA_ERROR(cudaSetDevice(0));
     
     printf("Processing Witness JSON file: %s\n", filename.c_str());
+    printf("Output will be written to: %s\n", output_filename.c_str());
     
     // Run Witness test cases
-    runWitnessTestCases(filename);
+    runWitnessTestCases(filename, output_filename);
     
     // Clean up
     CHECK_CUDA_ERROR(cudaDeviceReset());

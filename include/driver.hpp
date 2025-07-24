@@ -48,6 +48,12 @@ public:
     void setSolverMode(const std::string& mode);
     std::string getSolverMode() const;
 
+    // Verbosity control
+    void setVerbose(bool verbose);
+    void setQuiet(bool quiet);
+    bool isVerbose() const;
+    bool isQuiet() const;
+
     // Error handling
     void error(const witness::location& l, const std::string& m);
     void error(const std::string& m);
@@ -61,6 +67,10 @@ private:
     
     // Solver mode: "exhaustive" or "external"
     std::string solverMode;
+    
+    // Verbosity flags
+    bool verbose;
+    bool quiet;
     
     // Methods to manage the lexer's input stream
     void scan_begin(std::istream& in);

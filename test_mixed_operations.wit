@@ -1,0 +1,31 @@
+// Test file for mixing global() and litis() operations
+// This demonstrates how both operations work together
+
+// Define assets
+asset bike_sale = alice, sell_bike, bob;
+asset payment1 = bob, pay, alice;
+asset payment2 = bob, pay, carol;
+
+// First set of clauses
+clause clause1 = oblig(bike_sale);
+clause clause2 = oblig(payment1);
+
+// First global check - should be satisfiable
+asset global_check1 = global();
+
+// Second set of clauses (clause set is reset after global())
+clause clause3 = not(oblig(bike_sale)); // This conflicts with bike_sale
+clause clause4 = oblig(payment2);
+
+// Litis check on conflicting assets - should be unsatisfiable
+asset litis_check1 = litis(bike_sale, payment1);
+
+// Third set of clauses (clause set is reset after litis())
+clause clause5 = oblig(payment1);
+clause clause6 = oblig(payment2);
+
+// Litis check on non-conflicting assets - should be satisfiable
+asset litis_check2 = litis(payment1, payment2);
+
+// Final global check - should be satisfiable
+asset global_check2 = global(); 
