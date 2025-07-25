@@ -888,6 +888,25 @@ void SemanticAnalyzer::analyze(Program* program) {
         return;
     }
     
+    // Clean up previous JSON files to prevent CUDA program from processing stale data
+    if (verbose) {
+        std::cout << "Cleaning up previous JSON files..." << std::endl;
+    }
+    
+    // Remove all witness_export_*.json files from previous runs
+    std::string cleanup_command = "rm -f witness_export_*.json";
+    int cleanup_result = system(cleanup_command.c_str());
+    if (cleanup_result != 0 && verbose) {
+        std::cout << "Warning: Could not clean up all previous JSON files" << std::endl;
+    }
+    
+    // Remove all zdd_*.bin files from previous runs
+    cleanup_command = "rm -f zdd_*.bin";
+    cleanup_result = system(cleanup_command.c_str());
+    if (cleanup_result != 0 && verbose) {
+        std::cout << "Warning: Could not clean up all previous ZDD files" << std::endl;
+    }
+    
     // Clear previous analysis results
     errors.clear();
     warnings.clear();
