@@ -1,0 +1,75 @@
+%YAML 1.2
+---
+name: Witness
+file_extensions: [wit]
+scope: source.witness
+
+variables:
+  identifier: '[a-zA-Z_][a-zA-Z0-9_]*'
+
+contexts:
+  main:
+    - include: comments
+    - include: keywords
+    - include: strings
+    - include: numbers
+    - include: definitions
+    - include: operations
+
+  comments:
+    - match: '//.*$'
+      scope: comment.line.double-slash.witness
+    - match: '/\*'
+      push: comment_block
+      scope: punctuation.definition.comment.begin.witness
+
+  comment_block:
+    - match: '\*/'
+      pop: true
+      scope: punctuation.definition.comment.end.witness
+    - match: '.'
+      scope: comment.block.witness
+
+  keywords:
+    - match: '\b(asset|clause|subject|action|object|service|time|authority)\b'
+      scope: keyword.control.witness
+    - match: '\b(AND|OR|NOT|IMPLIES|EQUIV)\b'
+      scope: keyword.operator.logical.witness
+    - match: '\b(movable|non_movable|positive|negative)\b'
+      scope: storage.type.witness
+
+  strings:
+    - match: '"'
+      push: string_double
+      scope: punctuation.definition.string.begin.witness
+
+  string_double:
+    - match: '"'
+      pop: true
+      scope: punctuation.definition.string.end.witness
+    - match: '\\.'
+      scope: constant.character.escape.witness
+    - match: '.'
+      scope: string.quoted.double.witness
+
+  numbers:
+    - match: '\b\d+(\.\d+)?\b'
+      scope: constant.numeric.witness
+
+  definitions:
+    - match: '\basset\s+(\w+)\b'
+      captures:
+        1: variable.other.asset.witness
+      scope: entity.name.asset.witness
+    - match: '\bclause\s+(\w+)\b'
+      captures:
+        1: variable.other.clause.witness
+      scope: entity.name.clause.witness
+
+  operations:
+    - match: '\b(global|domain|litis|meet)\s*\('
+      scope: support.function.system.witness
+    - match: '\b(join|sell|compensation|consideration|forbearance|encumber|access|lien|evidence|argument)\s*\('
+      scope: support.function.join.witness
+    - match: '\b(oblig|claim|not)\s*\('
+      scope: support.function.logical.witness 

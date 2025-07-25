@@ -1,0 +1,47 @@
+{
+  "name": "witness-dsl",
+  "displayName": "Witness DSL",
+  "description": "Syntax highlighting for the Witness Domain Specific Language",
+  "version": "1.0.0",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "witness",
+        "aliases": [
+          "Witness",
+          "witness"
+        ],
+        "extensions": [
+          ".wit"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "witness",
+        "scopeName": "source.witness",
+        "path": "./syntaxes/witness.tmLanguage.json"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/witness-dsl.git"
+  },
+  "keywords": [
+    "witness",
+    "dsl",
+    "legal",
+    "contract",
+    "syntax"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+} 
