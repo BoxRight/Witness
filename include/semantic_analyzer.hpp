@@ -46,6 +46,7 @@ public:
         std::vector<std::vector<int>> assignments; // All satisfying assignments
         std::string error_message;               // If unsatisfiable
         std::vector<std::string> conflicting_clauses; // Minimal conflict set
+        std::vector<std::string> common_components; // For meet operations: common elements found
     };
     
     // Main analysis entry point
@@ -90,6 +91,11 @@ public:
     SatisfiabilityResult generateExhaustiveTruthTable();
     SatisfiabilityResult generateSelectiveTruthTable(const std::vector<std::string>& target_assets);
     SatisfiabilityResult generateSelectiveExternalTruthTable(const std::vector<std::string>& target_assets);
+    
+    // Meet operation analysis
+    SatisfiabilityResult generateMeetAnalysis(const std::string& left_asset, const std::string& right_asset);
+    void processDeferredMeetOperations();
+    void tryProcessDeferredMeetOperations();
     void exportForCudaSolver(const std::vector<std::set<std::vector<int>>>& clause_satisfying_assignments, 
                              const std::set<int>& all_asset_ids);
     void generateExternalSolverTruthTable();
@@ -153,6 +159,15 @@ private:
     // Current clauses for satisfiability checking
     std::vector<ClauseInfo> current_clauses;
     
+    // Deferred meet operations to process after all clauses are analyzed
+    struct DeferredMeetOperation {
+        std::string left_asset;
+        std::string right_asset;
+        std::string asset_name; // The asset being defined
+        bool processed; // Track if this operation has been processed
+    };
+    std::vector<DeferredMeetOperation> deferred_meet_operations;
+    
     // Conflict analysis for unsatisfiable clauses
     std::unique_ptr<ConflictAnalyzer> conflict_analyzer;
     
@@ -183,7 +198,7 @@ private:
     // System operation validation helpers
     bool validateGlobalOperation(FunctionCallExpression* func_call);
     bool validateLitisOperation(FunctionCallExpression* func_call);
-    bool validateMeetOperation(FunctionCallExpression* func_call);
+    bool validateMeetOperation(FunctionCallExpression* func_call, const std::string& asset_name = "");
     bool validateDomainOperation(FunctionCallExpression* func_call);
     
     // Specific contextual join validators

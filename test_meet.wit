@@ -1,0 +1,34 @@
+// Test file for meet() system operation
+// This tests greatest common legal denominator extraction from joined assets
+
+// Define basic assets
+asset bike_sale = alice, sell_bike, bob;
+asset payment = bob, pay, alice;
+asset delivery = alice, deliver_bike, bob;
+asset warranty = alice, provide_warranty, bob;
+
+// Create joined assets using different join operations
+asset sale_payment_join = join(bike_sale, payment);
+asset sale_delivery_join = join(bike_sale, delivery);
+asset payment_warranty_join = join(payment, warranty);
+
+// Test meet() on joined assets with common elements
+// sale_payment_join = (alice, "sell_bike_pay", bob) 
+// sale_delivery_join = (alice, "sell_bike_deliver_bike", bob)
+// Common: subject=alice, object=bob
+asset meet_test1 = meet(sale_payment_join, sale_delivery_join);
+
+// Test meet() on joined assets with some common elements
+// sale_payment_join = (alice, "sell_bike_pay", bob)
+// payment_warranty_join = (bob, "pay_provide_warranty", alice)
+// Common: subject-object relationship (alice ↔ bob)
+asset meet_test2 = meet(sale_payment_join, payment_warranty_join);
+
+// Test meet() on joined assets with no common elements
+// sale_payment_join = (alice, "sell_bike_pay", bob)
+// delivery = (alice, deliver_bike, bob) - not a join result
+asset meet_test3 = meet(sale_payment_join, delivery);
+
+// Test meet() on assets with completely different components
+asset unrelated_asset = charlie, buy_car, david;
+asset meet_test4 = meet(sale_payment_join, unrelated_asset); 

@@ -603,6 +603,140 @@ SemanticAnalyzer::SatisfiabilityResult SemanticAnalyzer::generateSelectiveExtern
     return result;
 }
 
+SemanticAnalyzer::SatisfiabilityResult SemanticAnalyzer::generateMeetAnalysis(const std::string& left_asset, const std::string& right_asset) {
+    SatisfiabilityResult result;
+    result.satisfiable = false;
+
+    // Get the asset components for both assets
+    TypeInfo* left_info = lookupType(left_asset);
+    TypeInfo* right_info = lookupType(right_asset);
+    
+    if (!left_info || left_info->type_keyword != "asset") {
+        result.error_message = "Asset '" + left_asset + "' not found or not a valid asset";
+        return result;
+    }
+    
+    if (!right_info || right_info->type_keyword != "asset") {
+        result.error_message = "Asset '" + right_asset + "' not found or not a valid asset";
+        return result;
+    }
+    
+    const std::vector<std::string>& left_components = left_info->asset_components;
+    const std::vector<std::string>& right_components = right_info->asset_components;
+    
+    if (left_components.size() < 3 || right_components.size() < 3) {
+        result.error_message = "Assets must have at least 3 components (subject, action, object)";
+        return result;
+    }
+    
+    // Extract common elements between the two assets
+    std::vector<std::string> common_elements;
+    
+    // Check for common subjects
+    if (left_components[0] == right_components[0]) {
+        common_elements.push_back("subject: " + left_components[0]);
+    }
+    
+    // Check for common objects
+    if (left_components[2] == right_components[2]) {
+        common_elements.push_back("object: " + left_components[2]);
+    }
+    
+    // Check for common actions (or similar actions)
+    if (left_components[1] == right_components[1]) {
+        common_elements.push_back("action: " + left_components[1]);
+    }
+    
+    // Check for cross-subject/object relationships
+    if (left_components[0] == right_components[2]) {
+        common_elements.push_back("subject-object: " + left_components[0] + " ↔ " + right_components[2]);
+    }
+    
+    if (left_components[2] == right_components[0]) {
+        common_elements.push_back("object-subject: " + left_components[2] + " ↔ " + right_components[0]);
+    }
+    
+    // Create a result representing the common elements
+    if (!common_elements.empty()) {
+        result.satisfiable = true;
+        result.error_message = "Meet analysis: Found " + std::to_string(common_elements.size()) + " common elements";
+        
+        // Create a symbolic assignment representing the common elements
+        std::vector<int> common_assignment;
+        for (const auto& element : common_elements) {
+            // Use a hash of the element as a symbolic ID
+            std::hash<std::string> hasher;
+            int element_id = static_cast<int>(hasher(element)) % 1000; // Keep it reasonable
+            common_assignment.push_back(element_id);
+        }
+        result.assignments.push_back(common_assignment);
+        
+        // Report the common elements
+        reportWarning("Common elements between '" + left_asset + "' and '" + right_asset + "':");
+        for (const auto& element : common_elements) {
+            reportWarning("  - " + element);
+        }
+        
+        // Store the common components for asset creation
+        result.common_components = common_elements;
+    } else {
+        result.error_message = "Meet analysis: No common elements found between '" + left_asset + "' and '" + right_asset + "'";
+        reportWarning("No common elements found between assets:");
+        reportWarning("  Left:  (" + left_components[0] + ", " + left_components[1] + ", " + left_components[2] + ")");
+        reportWarning("  Right: (" + right_components[0] + ", " + right_components[1] + ", " + right_components[2] + ")");
+    }
+
+    return result;
+}
+
+void SemanticAnalyzer::processDeferredMeetOperations() {
+    if (deferred_meet_operations.empty()) {
+        return;
+    }
+    
+    reportWarning("Processing " + std::to_string(deferred_meet_operations.size()) + " deferred meet() operations...");
+    
+    for (const auto& deferred_op : deferred_meet_operations) {
+        reportWarning("Processing deferred meet() operation: " + deferred_op.left_asset + " and " + deferred_op.right_asset);
+        
+        // Perform meet operation analysis
+        SatisfiabilityResult result = generateMeetAnalysis(deferred_op.left_asset, deferred_op.right_asset);
+        
+        if (result.satisfiable) {
+            reportWarning("Deferred meet() operation successful - common legal ground found");
+            
+            // Report common elements
+            for (size_t i = 0; i < result.assignments.size(); i++) {
+                std::string assignment_str = "Common assignment " + std::to_string(i + 1) + ": [";
+                for (size_t j = 0; j < result.assignments[i].size(); j++) {
+                    int lit = result.assignments[i][j];
+                    if (lit > 0) {
+                        assignment_str += "+" + std::to_string(lit);
+                    } else {
+                        assignment_str += std::to_string(lit);
+                    }
+                    if (j < result.assignments[i].size() - 1) {
+                        assignment_str += ", ";
+                    }
+                }
+                assignment_str += "]";
+                reportWarning(assignment_str);
+            }
+            std::cout << "Meet check SATISFIABLE" << std::endl;
+        } else {
+            reportError("Deferred meet() operation failed - no common legal ground found: " + result.error_message);
+            std::cout << "Meet check UNSATISFIABLE: " << result.error_message << std::endl;
+        }
+        
+        // Reset clause set for next operation
+        current_clauses.clear();
+        reportWarning("Clause set reset after deferred meet() operation.");
+    }
+    
+    // Clear the deferred operations after processing
+    deferred_meet_operations.clear();
+}
+
 void SemanticAnalyzer::exportForCudaSolver(const std::vector<std::set<std::vector<int>>>& clause_satisfying_assignments, 
                                            const std::set<int>& all_asset_ids) {
     std::cout << "\n=== CUDA SOLVER EXPORT (CudaSet Format) ===" << std::endl;
@@ -799,6 +933,8 @@ void SemanticAnalyzer::analyze(Program* program) {
         }
     }
     
+
+    
     // Report completion status
     if (!quiet) {
         if (errors.empty()) {
@@ -843,27 +979,124 @@ void SemanticAnalyzer::registerAssetDefinition(AssetDefinition* asset_def) {
     std::string name = asset_def->name->name;
     std::vector<std::string> components;
     
-    // Extract asset components from the expression list
-    if (asset_def->value) {
+    // Check if this is a join operation (single function call)
+    if (asset_def->value->expressions.size() == 1) {
+        auto& expr = asset_def->value->expressions[0];
+        
+        if (auto func_call = dynamic_cast<FunctionCallExpression*>(expr.get())) {
+            if (func_call->function_name && isJoinOperation(func_call->function_name->name)) {
+                // This is a join operation - compute combined components
+                std::string join_type = func_call->function_name->name;
+                
+                if (func_call->arguments && func_call->arguments->expressions.size() == 2) {
+                    auto left_arg = func_call->arguments->expressions[0].get();
+                    auto right_arg = func_call->arguments->expressions[1].get();
+                    
+                    // Get components from left and right assets
+                    auto left_components = getAssetComponents(left_arg);
+                    auto right_components = getAssetComponents(right_arg);
+                    
+                    // Debug: Report component sizes
+                    reportWarning("Join validation for '" + name + "': left_components.size()=" + 
+                                 std::to_string(left_components.size()) + ", right_components.size()=" + 
+                                 std::to_string(right_components.size()));
+                    
+                    if (left_components.size() >= 3 && right_components.size() >= 3) {
+                        // Create combined components based on join type
+                        if (join_type == "join") {
+                            // Universal join: combine subject and object, merge actions
+                            components.push_back(left_components[0]); // left subject
+                            components.push_back(left_components[1] + "_" + right_components[1]); // combined action
+                            components.push_back(left_components[2]); // left object
+                        } else {
+                            // For other join types, use the same pattern for now
+                            components.push_back(left_components[0]); // left subject
+                            components.push_back(join_type + "_" + left_components[1] + "_" + right_components[1]); // join_type + combined action
+                            components.push_back(left_components[2]); // left object
+                        }
+                        
+                        reportWarning("Join asset '" + name + "' created with components: (" + 
+                                     components[0] + ", " + components[1] + ", " + components[2] + ")");
+                        
+                        // Debug: Check if components are valid
+                        if (components[0].empty() || components[1].empty() || components[2].empty()) {
+                            reportError("Join asset '" + name + "' has empty components - this will cause issues");
+                        }
+                    } else {
+                        reportError("Join operation requires assets with at least 3 components each");
+                        return;
+                    }
+                } else {
+                    reportError("Join operation requires exactly 2 arguments");
+                    return;
+                }
+            } else if (func_call->function_name && isSystemOperation(func_call->function_name->name)) {
+                // This is a system operation
+                if (func_call->function_name->name == "meet") {
+                    // Handle meet operation - it will create the asset itself
+                    validateMeetOperation(func_call, name);
+                    return; // The meet operation handles asset creation
+                } else {
+                    // Other system operations, analyze normally
+                    analyzeExpression(expr.get());
+                    return;
+                }
+            } else {
+                // Not a join or system operation, analyze normally
+                analyzeExpression(expr.get());
+                return;
+            }
+        } else {
+            // Not a function call, analyze normally
+            analyzeExpression(expr.get());
+            return;
+        }
+    } else {
+        // Extract asset components from the expression list (basic asset definition)
         for (size_t i = 0; i < asset_def->value->expressions.size(); ++i) {
             const auto& expr = asset_def->value->expressions[i];
-            
             if (auto identifier = dynamic_cast<Identifier*>(expr.get())) {
                 components.push_back(identifier->name);
             } else if (auto string_literal = dynamic_cast<StringLiteral*>(expr.get())) {
                 components.push_back(string_literal->value);
-                
                 // Type inference: if this is a string literal in the action position (index 1),
                 // try to infer its type and create an implicit action definition
                 if (i == 1) { // Action position in asset definition [subject, action, object]
                     auto inferred_type = inferActionType(string_literal->value);
                     createImplicitActionDefinition(string_literal->value, inferred_type.first, inferred_type.second);
-                    
                     // Report the inference as a warning so users know what happened
                     reportWarning("Type inference: action '" + string_literal->value + 
                                  "' inferred as " + inferred_type.first + " (" + inferred_type.second + ")");
                 }
             }
+        }
+        // Robust type checking for asset construction (basic asset definition only)
+        if (components.size() != 3) {
+            reportError("Asset '" + name + "' must have exactly 3 components (subject/authority, service/action/time, subject/authority)");
+            throw std::runtime_error("Asset construction error");
+        }
+        auto check_type = [&](const std::string& sym, std::initializer_list<std::string> allowed_types) -> bool {
+            auto it = symbol_table.find(sym);
+            if (it == symbol_table.end()) return false;
+            for (const auto& t : allowed_types) {
+                if (it->second.type_keyword == t) return true;
+            }
+            return false;
+        };
+        // 1st component: subject/authority
+        if (!check_type(components[0], {"subject", "authority"})) {
+            reportError("First component of asset '" + name + "' must be a defined subject or authority (got '" + components[0] + "')");
+            throw std::runtime_error("Asset construction error");
+        }
+        // 2nd component: service/action/time
+        if (!check_type(components[1], {"service", "action", "time"})) {
+            reportError("Second component of asset '" + name + "' must be a defined service, action, or time (got '" + components[1] + "')");
+            throw std::runtime_error("Asset construction error");
+        }
+        // 3rd component: subject/authority
+        if (!check_type(components[2], {"subject", "authority"})) {
+            reportError("Third component of asset '" + name + "' must be a defined subject or authority (got '" + components[2] + "')");
+            throw std::runtime_error("Asset construction error");
         }
     }
     
@@ -1142,7 +1375,7 @@ bool SemanticAnalyzer::validateSystemOperation(const std::string& operation_type
     } else if (operation_type == "litis") {
         return validateLitisOperation(func_call);
     } else if (operation_type == "meet") {
-        return validateMeetOperation(func_call);
+        return validateMeetOperation(func_call, "");
     } else if (operation_type == "domain") {
         return validateDomainOperation(func_call);
     }
@@ -1943,7 +2176,7 @@ bool SemanticAnalyzer::validateLitisOperation(FunctionCallExpression* func_call)
     return true;
 }
 
-bool SemanticAnalyzer::validateMeetOperation(FunctionCallExpression* func_call) {
+bool SemanticAnalyzer::validateMeetOperation(FunctionCallExpression* func_call, const std::string& asset_name) {
     if (!func_call || !func_call->arguments) {
         reportError("meet() operation requires an argument list");
         return false;
@@ -1965,9 +2198,78 @@ bool SemanticAnalyzer::validateMeetOperation(FunctionCallExpression* func_call) 
         return false;
     }
     
-    // For now, all meet() operations are valid
-    // TODO: Implement validation that arguments are results of join operations
-    // TODO: Implement greatest common legal denominator extraction
+    // Extract asset names from arguments
+    std::string left_asset_name, right_asset_name;
+    
+    if (auto left_identifier = dynamic_cast<Identifier*>(left_arg)) {
+        left_asset_name = left_identifier->name;
+    } else {
+        reportError("meet() operation requires asset identifier arguments");
+        return false;
+    }
+    
+    if (auto right_identifier = dynamic_cast<Identifier*>(right_arg)) {
+        right_asset_name = right_identifier->name;
+    } else {
+        reportError("meet() operation requires asset identifier arguments");
+        return false;
+    }
+    
+    // Perform meet operation analysis for greatest common legal denominator extraction
+    reportWarning("meet() operation triggered - extracting greatest common legal denominator from: " + 
+                  left_asset_name + " and " + right_asset_name);
+    
+    // Perform meet operation analysis
+    SatisfiabilityResult result = generateMeetAnalysis(left_asset_name, right_asset_name);
+    
+    if (result.satisfiable) {
+        reportWarning("meet() operation successful - common elements found");
+        
+        // Create a new asset from the common components
+        if (!asset_name.empty() && !result.common_components.empty()) {
+            // Create a simplified asset representation from common elements
+            std::vector<std::string> asset_components;
+            
+            // Extract common subject, action, and object from common elements
+            std::string common_subject = "";
+            std::string common_action = "meet";
+            std::string common_object = "";
+            
+            for (const auto& element : result.common_components) {
+                if (element.find("subject: ") == 0) {
+                    common_subject = element.substr(9); // Remove "subject: " prefix
+                } else if (element.find("object: ") == 0) {
+                    common_object = element.substr(8); // Remove "object: " prefix
+                } else if (element.find("subject-object: ") == 0) {
+                    // Handle cross-relationship
+                    std::string relationship = element.substr(15); // Remove "subject-object: " prefix
+                    size_t arrow_pos = relationship.find(" ↔ ");
+                    if (arrow_pos != std::string::npos) {
+                        common_subject = relationship.substr(0, arrow_pos);
+                        common_object = relationship.substr(arrow_pos + 3);
+                    }
+                }
+            }
+            
+            // Always create an asset with exactly 3 components
+            asset_components.push_back(common_subject.empty() ? "shared" : common_subject);
+            asset_components.push_back(common_action);
+            asset_components.push_back(common_object.empty() ? "shared" : common_object);
+            
+            // Register the new meet asset in the symbol table
+            symbol_table[asset_name] = TypeInfo("asset", "", asset_components);
+            
+            reportWarning("Created meet asset '" + asset_name + "' with components: (" + 
+                         asset_components[0] + ", " + asset_components[1] + ", " + asset_components[2] + ")");
+        }
+        
+        std::cout << "Meet check SATISFIABLE" << std::endl;
+    } else {
+        reportError("meet() operation failed - no common elements found: " + result.error_message);
+        std::cout << "Meet check UNSATISFIABLE: " << result.error_message << std::endl;
+        return false;
+    }
+    
     return true;
 }
 
@@ -2337,7 +2639,55 @@ void SemanticAnalyzer::generateExternalSolverTruthTable() {
         if (i > 0) json << ", ";
         json << asset_list[i];
     }
-    json << "],\n  \"clauses\": [\n";
+    json << "],\n  \"asset_names\": {";
+    
+    // Add asset name mapping for ZDD queries
+    bool first_asset = true;
+    for (size_t i = 0; i < asset_list.size(); ++i) {
+        int asset_id = asset_list[i];
+        // Find the asset name for this ID
+        std::string asset_name = "unknown_asset_" + std::to_string(asset_id);
+        for (const auto& pair : asset_to_id) {
+            if (pair.second == asset_id) {
+                asset_name = pair.first;
+                break;
+            }
+        }
+        if (!first_asset) json << ", ";
+        json << "\"" << asset_id << "\": \"" << asset_name << "\"";
+        first_asset = false;
+    }
+    json << "},\n  \"asset_construction\": {";
+    
+    // Add asset construction details (subject, action, object) for ZDD queries
+    first_asset = true;
+    for (size_t i = 0; i < asset_list.size(); ++i) {
+        int asset_id = asset_list[i];
+        // Find the asset name for this ID
+        std::string asset_name = "unknown_asset_" + std::to_string(asset_id);
+        for (const auto& pair : asset_to_id) {
+            if (pair.second == asset_id) {
+                asset_name = pair.first;
+                break;
+            }
+        }
+        
+        // Get asset components from symbol table
+        std::vector<std::string> components;
+        auto it = symbol_table.find(asset_name);
+        if (it != symbol_table.end() && it->second.type_keyword == "asset") {
+            components = it->second.asset_components;
+        }
+        
+        if (!first_asset) json << ", ";
+        json << "\"" << asset_id << "\": {";
+        json << "\"subject\": \"" << (components.size() > 0 ? components[0] : "unknown") << "\", ";
+        json << "\"action\": \"" << (components.size() > 1 ? components[1] : "unknown") << "\", ";
+        json << "\"object\": \"" << (components.size() > 2 ? components[2] : "unknown") << "\"";
+        json << "}";
+        first_asset = false;
+    }
+    json << "},\n  \"clauses\": [\n";
     for (size_t clause_idx = 0; clause_idx < clause_satisfying_assignments.size(); ++clause_idx) {
         const auto& clause = current_clauses[clause_idx];
         const auto& assignments = clause_satisfying_assignments[clause_idx];
