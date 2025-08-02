@@ -21,6 +21,57 @@
 
 ## Quick Start
 
+### Prerequisites
+
+Before building Witness, ensure you have the following tools installed:
+
+#### Required Tools
+- **GCC/G++** (C++17 support)
+- **Make** (GNU Make)
+- **Bison** (Parser generator)
+- **Flex** (Lexical analyzer)
+
+#### Installation by Platform
+
+**Ubuntu/Debian:**
+```bash
+sudo apt-get update
+sudo apt-get install build-essential bison flex
+```
+
+**CentOS/RHEL/Fedora:**
+```bash
+sudo yum install gcc-c++ make bison flex
+# or for newer systems:
+sudo dnf install gcc-c++ make bison flex
+```
+
+**macOS:**
+```bash
+# Using Homebrew
+brew install bison flex
+
+# Using MacPorts
+sudo port install bison flex
+```
+
+**Arch Linux/Manjaro:**
+```bash
+sudo pacman -S base-devel bison flex
+```
+
+**Windows (WSL):**
+```bash
+sudo apt-get update
+sudo apt-get install build-essential bison flex
+```
+
+#### Optional: CUDA Support
+For CUDA acceleration, you'll also need:
+- **NVIDIA GPU** with CUDA support
+- **CUDA Toolkit** (version 11.0 or later)
+- **nvcc** compiler
+
 ### Installation
 
 ```bash
