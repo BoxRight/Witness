@@ -71,6 +71,33 @@ For CUDA acceleration, you'll also need:
 - **NVIDIA GPU** with CUDA support
 - **CUDA Toolkit** (version 11.0 or later)
 - **nvcc** compiler
+- **Intel TBB** (Threading Building Blocks) library
+- **Zstandard** compression library
+
+**Installation of CUDA dependencies:**
+
+**Ubuntu/Debian:**
+```bash
+sudo apt-get install libtbb-dev libzstd-dev
+```
+
+**CentOS/RHEL/Fedora:**
+```bash
+sudo yum install tbb-devel libzstd-devel
+# or for newer systems:
+sudo dnf install tbb-devel libzstd-devel
+```
+
+**Arch Linux/Manjaro:**
+```bash
+sudo pacman -S intel-oneapi-tbb zstd
+```
+
+**macOS:**
+```bash
+# Using Homebrew
+brew install tbb zstd
+```
 
 ### Installation
 
@@ -83,6 +110,7 @@ cd Witness
 make clean && make
 
 # Optional: Build CUDA solver (requires NVIDIA GPU and CUDA toolkit)
+# This creates the external solver used with --solver=external flag
 nvcc -arch=sm_86 -std=c++17 tree_fold_cuda.cu -o tree_fold_cuda -ltbb -lzstd
 ```
 
