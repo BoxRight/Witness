@@ -473,7 +473,99 @@ SemanticAnalyzer::SatisfiabilityResult SemanticAnalyzer::generateSelectiveExtern
         return result;
     }
 
+    // Create asset list from target assets
+    std::vector<int> asset_list;
+    for (const auto& asset_name : target_assets) {
+        auto it = asset_to_id.find(asset_name);
+        if (it != asset_to_id.end()) {
+            asset_list.push_back(it->second);
+        }
+    }
+    
     json_file << "{\n";
+    json_file << "  \"assets\": [";
+    for (size_t i = 0; i < asset_list.size(); ++i) {
+        if (i > 0) json_file << ", ";
+        json_file << asset_list[i];
+    }
+    json_file << "],\n";
+    json_file << "  \"asset_names\": {";
+    
+    // Add asset name mapping
+    bool first_asset = true;
+    for (size_t i = 0; i < asset_list.size(); ++i) {
+        int asset_id = asset_list[i];
+        std::string asset_name = "unknown_asset_" + std::to_string(asset_id);
+        for (const auto& pair : asset_to_id) {
+            if (pair.second == asset_id) {
+                asset_name = pair.first;
+                break;
+            }
+        }
+        if (!first_asset) json_file << ", ";
+        json_file << "\"" << asset_id << "\": \"" << asset_name << "\"";
+        first_asset = false;
+    }
+    json_file << "},\n";
+    json_file << "  \"asset_construction\": {";
+    
+    // Add asset construction details using component strings as keys
+    first_asset = true;
+    for (size_t i = 0; i < asset_list.size(); ++i) {
+        int asset_id = asset_list[i];
+        std::string asset_name = "unknown_asset_" + std::to_string(asset_id);
+        for (const auto& pair : asset_to_id) {
+            if (pair.second == asset_id) {
+                asset_name = pair.first;
+                break;
+            }
+        }
+        
+        // Get asset components from symbol table
+        std::vector<std::string> components;
+        auto it = symbol_table.find(asset_name);
+        if (it != symbol_table.end() && it->second.type_keyword == "asset") {
+            components = it->second.asset_components;
+        }
+        
+        // Get string values for components from symbol table
+        std::vector<std::string> component_strings;
+        for (const auto& component : components) {
+            auto component_it = symbol_table.find(component);
+            if (component_it != symbol_table.end()) {
+                // For actions, check if they have string values in their components
+                if (component_it->second.type_keyword == "action" && !component_it->second.asset_components.empty()) {
+                    // Actions store their string description as the first component
+                    component_strings.push_back(component_it->second.asset_components[0]);
+                } else {
+                    // For other types, use the identifier name
+                    component_strings.push_back(component);
+                }
+            } else {
+                component_strings.push_back(component);
+            }
+        }
+        
+        // Create descriptive asset name with string values
+        std::string descriptive_name = asset_name;
+        if (component_strings.size() >= 3) {
+            descriptive_name = asset_name + "(" + component_strings[0] + ":" + component_strings[1] + ":" + component_strings[2] + ")";
+        } else if (component_strings.size() == 2) {
+            descriptive_name = asset_name + "(" + component_strings[0] + ":" + component_strings[1] + ":unknown)";
+        } else if (component_strings.size() == 1) {
+            descriptive_name = asset_name + "(" + component_strings[0] + ":unknown:unknown)";
+        }
+        
+        if (!first_asset) json_file << ", ";
+        json_file << "\"" << asset_id << "\": {";
+        json_file << "\"asset_name\": \"" << descriptive_name << "\", ";
+        json_file << "\"subject\": \"" << (component_strings.size() > 0 ? component_strings[0] : "unknown") << "\", ";
+        json_file << "\"action\": \"" << (component_strings.size() > 1 ? component_strings[1] : "unknown") << "\", ";
+        json_file << "\"object\": \"" << (component_strings.size() > 2 ? component_strings[2] : "unknown") << "\"";
+        json_file << "}";
+        first_asset = false;
+    }
+    json_file << "},\n";
     json_file << "  \"clauses\": [\n";
     
     for (size_t i = 0; i < relevant_clauses.size(); ++i) {
@@ -1562,7 +1654,7 @@ void SemanticAnalyzer::analyzeClauseExpression(Expression* expr, const std::stri
             // Not a logical operation, analyze normally
             analyzeExpression(expr);
         }
-    } else if (auto bin = dynamic_cast<BinaryOpExpression*>(expr)) {
+    } else if (auto binary_expr = dynamic_cast<BinaryOpExpression*>(expr)) {
         // For binary logical operations, register the clause with the full expression
         addClause(clause_name, {}, {}, "binary_op", expr);
     } else {
@@ -2580,7 +2672,6 @@ void SemanticAnalyzer::generateExternalSolverTruthTable() {
         all_asset_ids.insert(clause_asset_ids.begin(), clause_asset_ids.end());
     }
     std::vector<int> asset_list(all_asset_ids.begin(), all_asset_ids.end());
-    int assets_per_assignment = asset_list.size();
 
     if (verbose) {
         std::cout << "\n=== EXTERNAL SOLVER DEBUG: Clause Sets ===" << std::endl;
@@ -2678,7 +2769,7 @@ void SemanticAnalyzer::generateExternalSolverTruthTable() {
     }
     json << "},\n  \"asset_construction\": {";
     
-    // Add asset construction details (subject, action, object) for ZDD queries
+    // Add asset construction details using component strings as keys
     first_asset = true;
     for (size_t i = 0; i < asset_list.size(); ++i) {
         int asset_id = asset_list[i];
@@ -2698,11 +2789,40 @@ void SemanticAnalyzer::generateExternalSolverTruthTable() {
             components = it->second.asset_components;
         }
         
+        // Get string values for components from symbol table
+        std::vector<std::string> component_strings;
+        for (const auto& component : components) {
+            auto component_it = symbol_table.find(component);
+            if (component_it != symbol_table.end()) {
+                // For actions, check if they have string values in their components
+                if (component_it->second.type_keyword == "action" && !component_it->second.asset_components.empty()) {
+                    // Actions store their string description as the first component
+                    component_strings.push_back(component_it->second.asset_components[0]);
+                } else {
+                    // For other types, use the identifier name
+                    component_strings.push_back(component);
+                }
+            } else {
+                component_strings.push_back(component);
+            }
+        }
+        
+        // Create descriptive asset name with string values
+        std::string descriptive_name = asset_name;
+        if (component_strings.size() >= 3) {
+            descriptive_name = asset_name + "(" + component_strings[0] + ":" + component_strings[1] + ":" + component_strings[2] + ")";
+        } else if (component_strings.size() == 2) {
+            descriptive_name = asset_name + "(" + component_strings[0] + ":" + component_strings[1] + ":unknown)";
+        } else if (component_strings.size() == 1) {
+            descriptive_name = asset_name + "(" + component_strings[0] + ":unknown:unknown)";
+        }
+        
         if (!first_asset) json << ", ";
         json << "\"" << asset_id << "\": {";
-        json << "\"subject\": \"" << (components.size() > 0 ? components[0] : "unknown") << "\", ";
-        json << "\"action\": \"" << (components.size() > 1 ? components[1] : "unknown") << "\", ";
-        json << "\"object\": \"" << (components.size() > 2 ? components[2] : "unknown") << "\"";
+        json << "\"asset_name\": \"" << descriptive_name << "\", ";
+        json << "\"subject\": \"" << (component_strings.size() > 0 ? component_strings[0] : "unknown") << "\", ";
+        json << "\"action\": \"" << (component_strings.size() > 1 ? component_strings[1] : "unknown") << "\", ";
+        json << "\"object\": \"" << (component_strings.size() > 2 ? component_strings[2] : "unknown") << "\"";
         json << "}";
         first_asset = false;
     }
